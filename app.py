@@ -254,6 +254,56 @@ def get_table_data(table_name):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# 4b. Get all rowids (matching current search and column filters)
+@app.route('/api/tables/<table_name>/rowids', methods=['GET'])
+def get_table_rowids(table_name):
+    try:
+        table_name = sanitize_name(table_name)
+        search = request.args.get('search', '').strip()
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get column information
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns_info = cursor.fetchall()
+        columns = [col['name'] for col in columns_info]
+        
+        # Build search condition
+        where_clauses = []
+        query_params = []
+        
+        if search:
+            search_conditions = []
+            for col in columns:
+                search_conditions.append(f"CAST({col} AS TEXT) LIKE ?")
+                query_params.append(f"%{search}%")
+            where_clauses.append("(" + " OR ".join(search_conditions) + ")")
+            
+        # Sütun bazlı filtreleme (Column-specific filters)
+        for col in columns:
+            col_filter = request.args.get(f"filter_{col}", "").strip()
+            if col_filter:
+                where_clauses.append(f"CAST({col} AS TEXT) LIKE ?")
+                query_params.append(f"%{col_filter}%")
+                
+        where_clause = ""
+        if where_clauses:
+            where_clause = " WHERE " + " AND ".join(where_clauses)
+            
+        # Get rowids
+        sql = f"SELECT rowid as _rowid_ FROM {table_name}{where_clause}"
+        cursor.execute(sql, query_params)
+        rowids = [row['_rowid_'] for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'rowids': rowids
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # 5. Insert row
 @app.route('/api/tables/<table_name>/row', methods=['POST'])
 def insert_row(table_name):

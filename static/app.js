@@ -420,17 +420,34 @@ function renderDataGrid() {
     selectAllCheckbox.id = 'select-all-rows';
     const allChecked = rows.length > 0 && rows.every(r => state.selectedRowIds.includes(r._rowid_));
     selectAllCheckbox.checked = allChecked;
-    selectAllCheckbox.addEventListener('change', (e) => {
+    selectAllCheckbox.addEventListener('change', async (e) => {
         const checked = e.target.checked;
-        rows.forEach(r => {
-            const idx = state.selectedRowIds.indexOf(r._rowid_);
-            if (checked && idx === -1) {
-                state.selectedRowIds.push(r._rowid_);
-            } else if (!checked && idx !== -1) {
-                state.selectedRowIds.splice(idx, 1);
+        if (checked) {
+            showLoader('Tüm satırlar seçiliyor...');
+            try {
+                const queryParams = new URLSearchParams({
+                    search: state.filters.search
+                });
+                if (state.filters.col_filters) {
+                    for (const [col, val] of Object.entries(state.filters.col_filters)) {
+                        if (val) {
+                            queryParams.append(`filter_${col}`, val);
+                        }
+                    }
+                }
+                const data = await apiCall(`/api/tables/${state.activeTable}/rowids?${queryParams}`);
+                state.selectedRowIds = data.rowids;
+                updateRowCheckboxesState();
+            } catch (err) {
+                console.error('Select all rowids error:', err);
+                selectAllCheckbox.checked = false;
+            } finally {
+                hideLoader();
             }
-        });
-        updateRowCheckboxesState();
+        } else {
+            state.selectedRowIds = [];
+            updateRowCheckboxesState();
+        }
     });
     checkboxTh.appendChild(selectAllCheckbox);
     headerTr.appendChild(checkboxTh);
