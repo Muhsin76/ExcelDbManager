@@ -48,6 +48,31 @@ def sanitize_name(name):
         sanitized = '_' + sanitized
     return sanitized or 'table_col'
 
+# Helper to guarantee unique column names from raw file headers
+def make_unique_column_names(column_names):
+    seen = {}
+    unique_names = []
+    for i, name in enumerate(column_names):
+        name_str = str(name).strip() if name is not None else f"Column_{i}"
+        sanitized = sanitize_name(name_str)
+        if not sanitized:
+            sanitized = f"column_{i}"
+            
+        key = sanitized.lower()
+        if key in seen:
+            seen[key] += 1
+            suffix = seen[key]
+            candidate = f"{sanitized}_{suffix}"
+            while candidate.lower() in seen:
+                suffix += 1
+                candidate = f"{sanitized}_{suffix}"
+            seen[candidate.lower()] = 0
+            unique_names.append(candidate)
+        else:
+            seen[key] = 0
+            unique_names.append(sanitized)
+    return unique_names
+
 # Helper to guess data type from a list of values
 def guess_data_type(values):
     if not values:
@@ -530,9 +555,7 @@ def parse_file():
                                     break
                     
                     if header:
-                        columns = [sanitize_name(h) for h in header]
-                        # Fill missing columns
-                        columns = [col if col else f"column_{i}" for i, col in enumerate(columns)]
+                        columns = make_unique_column_names(header)
                         
                         # Transpose for data type guessing
                         col_values = {col: [] for col in columns}
@@ -569,8 +592,7 @@ def parse_file():
                     reader = csv.reader(f)
                     header = next(reader, None)
                     if header:
-                        columns = [sanitize_name(h) for h in header]
-                        columns = [col if col else f"column_{i}" for i, col in enumerate(columns)]
+                        columns = make_unique_column_names(header)
                         
                         rows_data = []
                         for i, r in enumerate(reader):
@@ -653,8 +675,7 @@ def preview_sheet():
                         break
         
         if header:
-            columns = [sanitize_name(h) for h in header]
-            columns = [col if col else f"column_{i}" for i, col in enumerate(columns)]
+            columns = make_unique_column_names(header)
             
             col_values = {col: [] for col in columns}
             for r in rows_data:
@@ -720,8 +741,7 @@ def import_file():
             for row in row_generator:
                 if any(cell is not None for cell in row):
                     if not file_headers:
-                        file_headers = [sanitize_name(str(cell)) if cell is not None else f"Column_{i}" for i, cell in enumerate(row)]
-                        file_headers = [h if h else f"column_{i}" for i, h in enumerate(file_headers)]
+                        file_headers = make_unique_column_names(row)
                     else:
                         row_dict = {}
                         for idx, val in enumerate(row):
@@ -736,8 +756,7 @@ def import_file():
                 reader = csv.reader(f)
                 header = next(reader, None)
                 if header:
-                    file_headers = [sanitize_name(h) for h in header]
-                    file_headers = [h if h else f"column_{i}" for i, h in enumerate(file_headers)]
+                    file_headers = make_unique_column_names(header)
                     for r in reader:
                         row_dict = {}
                         for idx, val in enumerate(r):
