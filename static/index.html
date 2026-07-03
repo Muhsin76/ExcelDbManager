@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel & SQLite Veritabanı Portalı</title>
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <!-- App Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-wrapper">
+                    <i class="fa-solid fa-database logo-icon"></i>
+                    <span class="logo-text">Excel<span class="highlight">DB</span> Portal</span>
+                </div>
+            </div>
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Panel (Dashboard)</span>
+                </a>
+                <a href="#tables" class="nav-item" data-tab="tables">
+                    <i class="fa-solid fa-table-list"></i>
+                    <span>Tablolarım</span>
+                </a>
+                <a href="#import" class="nav-item" data-tab="import">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span>Excel/CSV Yükle</span>
+                </a>
+                <a href="#create-table" class="nav-item" data-tab="create-table">
+                    <i class="fa-solid fa-square-plus"></i>
+                    <span>Manuel Tablo Oluştur</span>
+                </a>
+                <a href="#relations" class="nav-item" data-tab="relations">
+                    <i class="fa-solid fa-circle-nodes"></i>
+                    <span>Tablo İlişkileri</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="theme-toggle" class="theme-btn" title="Temayı Değiştir">
+                    <i class="fa-solid fa-moon"></i>
+                    <span>Karanlık Mod</span>
+                </button>
+                <div class="status-indicator">
+                    <span class="dot online"></span>
+                    <span class="status-text">Localhost Aktif</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="welcome-area">
+                    <h1 id="page-title">Yönetim Paneli</h1>
+                    <p class="subtitle" id="page-subtitle">Veritabanı istatistikleri ve genel durum</p>
+                </div>
+                <div class="system-time">
+                    <i class="fa-regular fa-clock"></i>
+                    <span id="current-time">--:--:--</span>
+                </div>
+            </header>
+
+            <!-- Dynamic Views Container -->
+            <div class="view-content">
+
+                <!-- 1. DASHBOARD VIEW -->
+                <section id="view-dashboard" class="tab-view active">
+                    <!-- Quick Stats Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon purple-glow">
+                                <i class="fa-solid fa-table"></i>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Toplam Tablo Sayısı</span>
+                                <h3 id="stat-tables-count">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon blue-glow">
+                                <i class="fa-solid fa-list-ol"></i>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Toplam Satır Verisi</span>
+                                <h3 id="stat-rows-count">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green-glow">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                            </div>
+                            <div class="stat-details">
+                                <span class="stat-label">Veritabanı Tipi</span>
+                                <h3>SQLite 3</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Welcome & Quick Start Card -->
+                    <div class="dashboard-banner">
+                        <div class="banner-text">
+                            <h2>Verilerinizi Güvenle Yönetin</h2>
+                            <p>Bu portal ile Excel veya CSV formatındaki dosyalarınızı otomatik olarak SQLite veritabanı tablolarına dönüştürebilir, verileriniz üzerinde arama, filtreleme, ekleme, güncelleme ve silme (CRUD) işlemlerini gerçekleştirebilirsiniz.</p>
+                            <div class="banner-buttons">
+                                <button class="btn btn-primary" onclick="switchTab('import')">
+                                    <i class="fa-solid fa-file-import"></i> Excel Dosyası Yükle
+                                </button>
+                                <button class="btn btn-secondary" onclick="switchTab('create-table')">
+                                    <i class="fa-solid fa-plus"></i> Yeni Tablo Tasarla
+                                </button>
+                            </div>
+                        </div>
+                        <div class="banner-visual">
+                            <i class="fa-solid fa-circle-nodes network-anim"></i>
+                        </div>
+                    </div>
+
+                    <!-- Recent Tables Section -->
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h3>Son Eklenen Tablolar</h3>
+                            <button class="btn btn-link" onclick="switchTab('tables')">Tümünü Gör <i class="fa-solid fa-arrow-right"></i></button>
+                        </div>
+                        <div class="grid-card recent-tables-card">
+                            <div class="table-responsive">
+                                <table class="custom-table" id="recent-tables-list">
+                                    <thead>
+                                        <tr>
+                                            <th>Tablo Adı</th>
+                                            <th>Sütun Sayısı</th>
+                                            <th>Toplam Satır</th>
+                                            <th>İşlemler</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted">Henüz tablo bulunmamaktadır.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. MY TABLES VIEW -->
+                <section id="view-tables" class="tab-view">
+                    <div class="tables-layout">
+                        <!-- Sidebar: List of available tables -->
+                        <div class="tables-sidebar card-glass">
+                            <div class="sidebar-search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="table-list-search" placeholder="Tablo ara...">
+                            </div>
+                            <ul class="tables-list-items" id="tables-list-items">
+                                <li class="text-muted text-center p-3">Tablolar yükleniyor...</li>
+                            </ul>
+                        </div>
+
+                        <!-- Data Viewer Section -->
+                        <div class="tables-viewer">
+                            <!-- Empty State -->
+                            <div class="empty-state card-glass" id="table-viewer-empty">
+                                <i class="fa-solid fa-table-list empty-icon"></i>
+                                <h3>Veri Görüntüleyici</h3>
+                                <p>İçeriğini incelemek, arama yapmak veya düzenleme işlemleri gerçekleştirmek için soldaki listeden bir tablo seçin.</p>
+                            </div>
+
+                            <!-- Table Display & CRUD Controls (Hidden initially) -->
+                            <div class="table-details-panel card-glass hidden" id="table-viewer-content">
+                                <div class="table-details-header">
+                                    <div class="table-title-area">
+                                        <h2 id="active-table-title">Seçili Tablo</h2>
+                                        <span class="badge" id="active-table-badge">0 Satır</span>
+                                    </div>
+                                    <div class="table-action-buttons">
+                                        <button class="btn btn-success btn-sm" id="btn-add-row">
+                                            <i class="fa-solid fa-plus"></i> Yeni Satır Ekle
+                                        </button>
+                                        <div class="dropdown-wrapper">
+                                            <button class="btn btn-primary btn-sm dropdown-trigger">
+                                                <i class="fa-solid fa-download"></i> Dışa Aktar <i class="fa-solid fa-chevron-down text-xs"></i>
+                                            </button>
+                                            <div class="dropdown-content">
+                                                <a href="#" id="export-excel-btn"><i class="fa-solid fa-file-excel text-green"></i> Excel Olarak İndir (.xlsx)</a>
+                                                <a href="#" id="export-csv-btn"><i class="fa-solid fa-file-csv text-blue"></i> CSV Olarak İndir (.csv)</a>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-danger btn-sm" id="btn-delete-table">
+                                            <i class="fa-solid fa-trash-can"></i> Tabloyu Sil
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Filter/Search bar inside table -->
+                                <div class="table-controls-row">
+                                    <div class="search-box">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <input type="text" id="table-search-input" placeholder="Tablo içinde ara...">
+                                    </div>
+                                    <div class="pagination-size">
+                                        <label for="page-size-select">Sayfa Başına:</label>
+                                        <select id="page-size-select" class="form-control-sm">
+                                            <option value="10">10</option>
+                                            <option value="25" selected>25</option>
+                                            <option value="50">50</option>
+                                            <option value="100">100</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Active Grid -->
+                                <div class="table-grid-wrapper table-responsive">
+                                    <table class="custom-table" id="data-grid">
+                                        <thead>
+                                            <!-- Dynamically generated -->
+                                        </thead>
+                                        <tbody>
+                                            <!-- Dynamically generated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Pagination footer -->
+                                <div class="table-pagination-footer">
+                                    <span class="pagination-info" id="pagination-info">Gösterilen: 0 - 0 / Toplam: 0</span>
+                                    <div class="pagination-buttons" id="pagination-buttons">
+                                        <!-- Dynamically generated -->
+                                    </div>
+                                </div>
+
+                                <!-- Toplu İşlemler Barı (Bulk Actions Bar) -->
+                                <div id="bulk-actions-bar" class="bulk-actions-bar hidden">
+                                    <div class="bulk-info">
+                                        <i class="fa-solid fa-circle-info text-indigo"></i>
+                                        <span id="bulk-selected-count" class="font-bold text-indigo">0</span> satır seçildi
+                                    </div>
+                                    <div class="bulk-actions">
+                                        <div class="bulk-update-group">
+                                            <select id="bulk-update-col" class="form-control-sm">
+                                                <!-- Dynamically populated -->
+                                            </select>
+                                            <input type="text" id="bulk-update-val" class="form-control-sm" placeholder="Yeni değer...">
+                                            <button class="btn btn-primary btn-sm" id="btn-bulk-update">
+                                                <i class="fa-solid fa-pen"></i> Seçilenleri Güncelle
+                                            </button>
+                                        </div>
+                                        <button class="btn btn-danger btn-sm" id="btn-bulk-delete">
+                                            <i class="fa-solid fa-trash-can"></i> Seçilenleri Sil
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm" id="btn-bulk-clear">
+                                            Seçimi Temizle
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. IMPORT EXCEL/CSV VIEW -->
+                <section id="view-import" class="tab-view">
+                    <div class="import-container card-glass">
+                        <!-- Step 1: Upload File -->
+                        <div id="import-step-upload" class="import-step active">
+                            <div class="upload-zone" id="drop-zone">
+                                <input type="file" id="file-input" accept=".csv, .xlsx, .xls" hidden>
+                                <div class="upload-illustration">
+                                    <i class="fa-solid fa-file-excel excel-icon"></i>
+                                    <i class="fa-solid fa-file-csv csv-icon"></i>
+                                    <i class="fa-solid fa-arrow-up-from-bracket upload-arrow"></i>
+                                </div>
+                                <h3>Dosyanızı Buraya Sürükleyin</h3>
+                                <p class="text-muted">veya dosya seçmek için <strong>tıklayın</strong></p>
+                                <p class="file-limits">Desteklenen formatlar: .xlsx, .xls, .csv (Maks. 16MB)</p>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Configure Schema and Preview (Hidden initially) -->
+                        <div id="import-step-configure" class="import-step hidden">
+                            <div class="config-header">
+                                <button class="btn btn-link btn-back" id="btn-import-back">
+                                    <i class="fa-solid fa-arrow-left"></i> Geri Dön
+                                </button>
+                                <h2>İçe Aktarım Ayarları</h2>
+                            </div>
+
+                            <div class="config-grid">
+                                <!-- Configuration Panel -->
+                                <div class="config-panel-form">
+                                    <div class="form-group">
+                                        <label for="import-table-name">Oluşturulacak Tablo Adı</label>
+                                        <input type="text" id="import-table-name" class="form-control" placeholder="Örn: calisanlar_listesi">
+                                        <span class="form-hint">Boşluksuz ve Türkçe karaktersiz girilmesi önerilir.</span>
+                                    </div>
+
+                                    <div class="form-group" id="sheet-select-wrapper">
+                                        <label for="import-sheet-name">Çalışma Sayfası (Sheet)</label>
+                                        <select id="import-sheet-name" class="form-control">
+                                            <!-- Dynamically generated -->
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>İçe Aktarım Modu</label>
+                                        <div class="radio-group">
+                                            <label class="radio-label">
+                                                <input type="radio" name="import-mode" value="new" checked>
+                                                <div class="radio-content">
+                                                    <span class="radio-title">Yeni Tablo Oluştur</span>
+                                                    <span class="radio-desc">Belirttiğiniz isimle yepyeni bir tablo oluşturur.</span>
+                                                </div>
+                                            </label>
+                                            <label class="radio-label">
+                                                <input type="radio" name="import-mode" value="append">
+                                                <div class="radio-content">
+                                                    <span class="radio-title">Mevcut Tabloya Ekle</span>
+                                                    <span class="radio-desc">Verileri var olan seçili bir tablonun altına ekler.</span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Existing Table Select (Hidden by default, shown when append selected) -->
+                                    <div class="form-group hidden" id="target-table-wrapper">
+                                        <label for="import-target-table">Hedef Tablo</label>
+                                        <select id="import-target-table" class="form-control">
+                                            <!-- Dynamically populated -->
+                                        </select>
+                                    </div>
+
+                                    <button class="btn btn-primary w-full mt-4" id="btn-execute-import">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i> Veritabanına Aktarımı Başlat
+                                    </button>
+                                </div>
+
+                                <!-- Column Schema / Mapping Area -->
+                                <div class="config-schema-area">
+                                    <h3>Sütun Yapılandırması / Eşleştirme</h3>
+                                    
+                                    <!-- Dynamic content -->
+                                    <div id="schema-mapping-container" class="schema-mapping-list">
+                                        <!-- Generated columns list with types/mappings -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- File Preview Area -->
+                            <div class="config-preview-section">
+                                <h3>Dosya Önizlemesi (İlk 5 Satır)</h3>
+                                <div class="table-responsive border-glass">
+                                    <table class="custom-table" id="import-preview-table">
+                                        <thead>
+                                            <!-- Dynamically generated -->
+                                        </thead>
+                                        <tbody>
+                                            <!-- Dynamically generated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. CREATE TABLE MANUALLY VIEW -->
+                <section id="view-create-table" class="tab-view">
+                    <div class="create-table-container card-glass">
+                        <h2>Yeni Tablo Tasarımcısı</h2>
+                        <p class="subtitle">Sütunları ve veri tiplerini manuel tanımlayarak yeni bir SQLite tablosu oluşturun.</p>
+
+                        <form id="manual-table-form" class="mt-4">
+                            <div class="form-group max-w-md">
+                                <label for="manual-table-name">Tablo Adı</label>
+                                <input type="text" id="manual-table-name" class="form-control" placeholder="Örn: musteriler" required>
+                                <span class="form-hint">Boşluksuz ve İngilizce karakterler kullanılması önerilir.</span>
+                            </div>
+
+                            <div class="column-definition-section">
+                                <div class="section-title-row">
+                                    <h3>Sütunlar</h3>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btn-add-column-def">
+                                        <i class="fa-solid fa-plus"></i> Sütun Ekle
+                                    </button>
+                                </div>
+
+                                <div class="column-defs-list" id="column-defs-list">
+                                    <!-- Standard Initial Column (e.g. ad_soyad) -->
+                                    <div class="column-def-row">
+                                        <div class="form-group col-name">
+                                            <input type="text" class="form-control col-name-input" placeholder="Sütun Adı" required value="id_no">
+                                        </div>
+                                        <div class="form-group col-type">
+                                            <select class="form-control col-type-select">
+                                                <option value="INTEGER">Sayı (INTEGER)</option>
+                                                <option value="TEXT" selected>Metin (TEXT)</option>
+                                                <option value="REAL">Ondalıklı Sayı (REAL)</option>
+                                            </select>
+                                        </div>
+                                        <button type="button" class="btn-delete-col" disabled title="İlk sütun silinemez">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-actions mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa-solid fa-floppy-disk"></i> Tabloyu Kaydet ve Oluştur
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- 5. TABLE RELATIONSHIPS VIEW -->
+                <section id="view-relations" class="tab-view">
+                    <div class="relations-layout card-glass">
+                        <h2>Tablo İlişkileri ve Yabancı Anahtarlar</h2>
+                        <p class="subtitle">İki tabloyu seçip yan yana getirin, sütun başlıklarına tıklayarak otomatik silme ve güncelleme ilişkileri kurun.</p>
+                        <div class="relations-legend" style="display: flex; gap: 15px; font-size: 0.8rem; margin-top: 12px; margin-bottom: 4px; color: var(--text-secondary);">
+                            <span><span class="badge badge-pk" style="background-color: var(--accent-primary); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">PK/UNI</span> Birincil / Benzersiz Anahtar</span>
+                            <span><span class="badge badge-fk" style="background-color: var(--success); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">FK</span> Yabancı (İlişkili) Anahtar</span>
+                        </div>
+
+                        <!-- Control selectors for Table A and Table B -->
+                        <div class="relations-selectors-row mt-4">
+                            <div class="form-group select-table-group">
+                                <label for="relation-table-a"><i class="fa-solid fa-table text-purple"></i> Ana Tablo (Parent Table - Değişen/Silinen Veri)</label>
+                                <select id="relation-table-a" class="form-control">
+                                    <option value="" disabled selected>Tablo Seçin...</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="relations-arrow">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                            </div>
+                            <div class="form-group select-table-group">
+                                <label for="relation-table-b"><i class="fa-solid fa-table text-blue"></i> İlişkili Tablo (Child Table - Etkilenen Veri)</label>
+                                <select id="relation-table-b" class="form-control">
+                                    <option value="" disabled selected>Tablo Seçin...</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Side-by-Side Tables Display -->
+                        <div class="relations-tables-container mt-4">
+                            <!-- Left Table (Table A) -->
+                            <div class="relation-table-view card-glass" id="relation-table-a-card">
+                                <h3 class="relation-table-name" id="relation-table-a-title">Ana Tablo Seçilmedi</h3>
+                                <div class="table-columns-list" id="relation-table-a-cols">
+                                    <div class="text-muted text-center p-4">Lütfen bir ana tablo seçin.</div>
+                                </div>
+                            </div>
+
+                            <!-- Connection Line or Info Area -->
+                            <div class="relation-connect-info">
+                                <div class="connect-action-box" id="connect-action-box">
+                                    <div class="connect-selection-status text-muted">
+                                        Bağlantı kurmak için sol tablodan bir sütun (Parent) ve sağ tablodan bir sütun (Child) seçin.
+                                    </div>
+                                    <div class="relation-actions-options hidden" id="relation-actions-options">
+                                        <div class="form-group mt-2">
+                                            <label for="relation-on-update">Güncelleme Eylemi (ON UPDATE):</label>
+                                            <select id="relation-on-update" class="form-control form-control-sm">
+                                                <option value="CASCADE" selected>Değişikliği Otomatik Yay (CASCADE)</option>
+                                                <option value="SET NULL">Boş Bırak (SET NULL)</option>
+                                                <option value="RESTRICT">Güncellemeyi Engelle (RESTRICT)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group mt-2">
+                                            <label for="relation-on-delete">Silme Eylemi (ON DELETE):</label>
+                                            <select id="relation-on-delete" class="form-control form-control-sm">
+                                                <option value="CASCADE" selected>İlişkili Satırları Otomatik Sil (CASCADE)</option>
+                                                <option value="SET NULL">Boş Bırak (SET NULL)</option>
+                                                <option value="RESTRICT">Silmeyi Engelle (RESTRICT)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary w-full mt-3 hidden" id="btn-create-relation">
+                                        <i class="fa-solid fa-link"></i> İlişkiyi Tanımla
+                                    </button>
+                                    <div id="relation-suggestions-container" class="relation-suggestions-container mt-4 hidden">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-muted mb-2 text-left" style="font-size: 0.75rem; margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px; text-align: left;"><i class="fa-solid fa-wand-magic-sparkles text-indigo"></i> Önerilen Eşleşmeler:</h4>
+                                        <div id="relation-suggestions-list" class="relation-suggestions-list" style="max-height: 200px; overflow-y: auto; text-align: left;">
+                                            <!-- Dynamically populated -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Table (Table B) -->
+                            <div class="relation-table-view card-glass" id="relation-table-b-card">
+                                <h3 class="relation-table-name" id="relation-table-b-title">İlişkili Tablo Seçilmedi</h3>
+                                <div class="table-columns-list" id="relation-table-b-cols">
+                                    <div class="text-muted text-center p-4">Lütfen bir ilişkili tablo seçin.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Existing Relationships List -->
+                        <div class="existing-relations-section mt-5">
+                            <h3>Mevcut Veritabanı İlişkileri</h3>
+                            <div class="table-responsive border-glass mt-3">
+                                <table class="custom-table" id="relations-list-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ana Tablo (Parent)</th>
+                                            <th>Ana Sütun (PK/Unique)</th>
+                                            <th>Yön</th>
+                                            <th>İlişkili Tablo (Child)</th>
+                                            <th>İlişkili Sütun (FK)</th>
+                                            <th>Silme Eylemi (ON DELETE)</th>
+                                            <th>Güncelleme Eylemi (ON UPDATE)</th>
+                                            <th>İşlemler</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">Yükleniyor...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- 5. CRUD MODAL DIALOGS -->
+    
+    <!-- Row Editor Modal (Add/Edit) -->
+    <div class="modal" id="row-modal">
+        <div class="modal-content card-glass">
+            <div class="modal-header">
+                <h3 id="modal-row-title">Satır Düzenle</h3>
+                <button class="btn-close-modal" id="btn-close-row-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="row-edit-form">
+                <div class="modal-body" id="row-modal-fields">
+                    <!-- Dynamic fields based on table schema -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-row">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-row">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- App Loader Spinner overlay -->
+    <div class="loading-overlay hidden" id="app-loader">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p id="loader-text">İşlem yapılıyor, lütfen bekleyin...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

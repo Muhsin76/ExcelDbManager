@@ -1,0 +1,6 @@
+Customer_ID,Full_Name,Email,Total_Spent,Is_Active
+1001,Ahmet Yilmaz,ahmet@example.com,1250.50,True
+1002,Ayse Demir,ayse@example.com,450.00,True
+1003,Mehmet Kaya,mehmet@example.com,0.00,False
+1004,Fatma Celik,fatma@example.com,3200.75,True
+1005,Ali Can,ali@example.com,78.20,True
