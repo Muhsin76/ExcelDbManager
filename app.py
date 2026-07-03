@@ -140,7 +140,7 @@ def create_table():
         for col in columns_data:
             col_name = sanitize_name(col.get('name'))
             col_type = col.get('type', 'TEXT').upper()
-            if col_type not in ['TEXT', 'INTEGER', 'REAL', 'NUMERIC', 'BLOB']:
+            if col_type not in ['TEXT', 'INTEGER', 'REAL', 'NUMERIC', 'BLOB', 'DATE', 'DATETIME', 'FLOAT', 'DOUBLE', 'VARCHAR', 'BOOLEAN']:
                 col_type = 'TEXT'
             column_defs.append(f"{col_name} {col_type}")
             

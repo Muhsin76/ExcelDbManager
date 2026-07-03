@@ -841,24 +841,50 @@ function openRowModal(mode, rowData = null) {
         let input;
         const colType = (types[col] || 'TEXT').toUpperCase();
         
-        if (colType === 'INTEGER' || colType === 'REAL' || colType === 'NUMERIC') {
+        if (colType === 'INTEGER' || colType === 'REAL' || colType === 'NUMERIC' || colType === 'FLOAT' || colType === 'DOUBLE') {
             input = document.createElement('input');
             input.type = 'number';
-            if (colType === 'REAL') input.step = 'any';
+            if (colType === 'REAL' || colType === 'FLOAT' || colType === 'DOUBLE') input.step = 'any';
             input.className = 'form-control';
+            if (mode === 'edit' && rowData) {
+                input.value = rowData[col] !== null ? rowData[col] : '';
+            }
+        } else if (colType === 'DATE') {
+            input = document.createElement('input');
+            input.type = 'date';
+            input.className = 'form-control';
+            if (mode === 'edit' && rowData && rowData[col]) {
+                input.value = String(rowData[col]).substring(0, 10);
+            }
+        } else if (colType === 'DATETIME') {
+            input = document.createElement('input');
+            input.type = 'datetime-local';
+            input.className = 'form-control';
+            if (mode === 'edit' && rowData && rowData[col]) {
+                input.value = String(rowData[col]).replace(' ', 'T').substring(0, 16);
+            }
+        } else if (colType === 'BOOLEAN') {
+            input = document.createElement('select');
+            input.className = 'form-control';
+            input.innerHTML = `
+                <option value="True">True</option>
+                <option value="False">False</option>
+            `;
+            if (mode === 'edit' && rowData) {
+                const dbVal = String(rowData[col]).toLowerCase();
+                input.value = (dbVal === 'true' || dbVal === '1') ? 'True' : 'False';
+            }
         } else {
             input = document.createElement('input');
             input.type = 'text';
             input.className = 'form-control';
+            if (mode === 'edit' && rowData) {
+                input.value = rowData[col] !== null ? rowData[col] : '';
+            }
         }
         
         input.name = col;
         input.id = `input-field-${col}`;
-        
-        // If edit mode, populate value
-        if (mode === 'edit' && rowData) {
-            input.value = rowData[col] !== null ? rowData[col] : '';
-        }
         
         formGroup.appendChild(label);
         formGroup.appendChild(input);
@@ -1168,7 +1194,7 @@ function renderSchemaMapping(isAppend = false) {
             const row = document.createElement('div');
             row.className = 'schema-row';
             
-            const types = ['TEXT', 'INTEGER', 'REAL'];
+            const types = ['TEXT', 'INTEGER', 'REAL', 'FLOAT', 'DATE', 'DATETIME', 'BOOLEAN'];
             let selectOptions = '';
             types.forEach(t => {
                 const selected = col.type === t ? 'selected' : '';
@@ -1346,9 +1372,13 @@ function initTableCreatorEvents() {
             </div>
             <div class="form-group col-type">
                 <select class="form-control col-type-select">
-                    <option value="INTEGER">Sayı (INTEGER)</option>
                     <option value="TEXT" selected>Metin (TEXT)</option>
+                    <option value="INTEGER">Sayı (INTEGER)</option>
                     <option value="REAL">Ondalıklı Sayı (REAL)</option>
+                    <option value="FLOAT">Ondalıklı Sayı (FLOAT)</option>
+                    <option value="DATE">Tarih (DATE)</option>
+                    <option value="DATETIME">Tarih & Saat (DATETIME)</option>
+                    <option value="BOOLEAN">Doğru/Yanlış (BOOLEAN)</option>
                 </select>
             </div>
             <button type="button" class="btn-delete-col" title="Sütunu Sil">
