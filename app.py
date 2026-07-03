@@ -179,6 +179,12 @@ def get_table_data(table_name):
         sort_by = request.args.get('sort_by', '').strip()
         sort_order = request.args.get('sort_order', 'asc').lower()
         
+        # Relation filters
+        rel_filter_type = request.args.get('rel_filter_type', '').strip()
+        rel_filter_table = request.args.get('rel_filter_table', '').strip()
+        rel_filter_col = request.args.get('rel_filter_col', '').strip()
+        rel_filter_other_col = request.args.get('rel_filter_other_col', '').strip()
+        
         if sort_order not in ['asc', 'desc']:
             sort_order = 'asc'
             
@@ -208,6 +214,17 @@ def get_table_data(table_name):
             if col_filter:
                 where_clauses.append(f"CAST({col} AS TEXT) LIKE ?")
                 query_params.append(f"%{col_filter}%")
+                
+        # İlişki bazlı filtreleme (Relation filters: matched/unmatched)
+        if rel_filter_type and rel_filter_table and rel_filter_col and rel_filter_other_col:
+            rel_filter_table = sanitize_name(rel_filter_table)
+            rel_filter_col = sanitize_name(rel_filter_col)
+            rel_filter_other_col = sanitize_name(rel_filter_other_col)
+            
+            if rel_filter_type == 'matched':
+                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+            elif rel_filter_type == 'unmatched':
+                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -261,6 +278,12 @@ def get_table_rowids(table_name):
         table_name = sanitize_name(table_name)
         search = request.args.get('search', '').strip()
         
+        # Relation filters
+        rel_filter_type = request.args.get('rel_filter_type', '').strip()
+        rel_filter_table = request.args.get('rel_filter_table', '').strip()
+        rel_filter_col = request.args.get('rel_filter_col', '').strip()
+        rel_filter_other_col = request.args.get('rel_filter_other_col', '').strip()
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -286,6 +309,17 @@ def get_table_rowids(table_name):
             if col_filter:
                 where_clauses.append(f"CAST({col} AS TEXT) LIKE ?")
                 query_params.append(f"%{col_filter}%")
+                
+        # İlişki bazlı filtreleme (Relation filters: matched/unmatched)
+        if rel_filter_type and rel_filter_table and rel_filter_col and rel_filter_other_col:
+            rel_filter_table = sanitize_name(rel_filter_table)
+            rel_filter_col = sanitize_name(rel_filter_col)
+            rel_filter_other_col = sanitize_name(rel_filter_other_col)
+            
+            if rel_filter_type == 'matched':
+                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+            elif rel_filter_type == 'unmatched':
+                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:

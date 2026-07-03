@@ -108,18 +108,18 @@ body {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
 }
 ::-webkit-scrollbar-track {
     background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 4px;
+    background: var(--text-muted);
+    border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--text-secondary);
 }
 
 /* ==========================================================================
@@ -1005,10 +1005,9 @@ body {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
     max-width: 300px;
-    text-overflow: ellipsis;
-    overflow: hidden;
 }
 
 .custom-table tbody tr {
@@ -2045,6 +2044,39 @@ body {
     font-weight: 700;
     padding: 3px 6px;
     border-radius: 4px;
+}
+
+/* Relationship Filter Group Styles */
+.relation-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.relation-filter-group label {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.relation-filter-group select {
+    max-width: 280px;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .relation-filter-group {
+        width: 100%;
+        margin-top: 8px;
+    }
+    .relation-filter-group select {
+        max-width: 100%;
+        flex-grow: 1;
+    }
 }
 
 

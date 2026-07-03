@@ -21,7 +21,8 @@ const state = {
         search: '',
         sort_by: '',
         sort_order: 'asc',
-        col_filters: {} // Added for column-specific filtering
+        col_filters: {}, // Added for column-specific filtering
+        rel_filter: null // Store selected relationship filter
     },
     selectedRowIds: [], // Store selected row IDs for bulk actions
     // Temp data during file upload
@@ -326,9 +327,20 @@ function selectTable(tableName) {
     state.filters.sort_by = '';
     state.filters.sort_order = 'asc';
     state.filters.col_filters = {}; // Reset column filters
+    state.filters.rel_filter = null; // Reset relation filter
     state.selectedRowIds = []; // Clear selected rows
     
     document.getElementById('table-search-input').value = '';
+    
+    // Reset and hide relation filter dropdown
+    const relFilterSelect = document.getElementById('relation-filter-select');
+    if (relFilterSelect) {
+        relFilterSelect.value = '';
+    }
+    const relFilterWrapper = document.getElementById('relation-filter-wrapper');
+    if (relFilterWrapper) {
+        relFilterWrapper.classList.add('hidden');
+    }
     
     // Highlight list item
     document.querySelectorAll('.table-list-item').forEach(item => {
@@ -347,6 +359,8 @@ function selectTable(tableName) {
     
     // Fetch and render data
     fetchTableData();
+    // Populate relation filters dropdown
+    updateRelationFiltersDropdown();
 }
 
 async function fetchTableData() {
@@ -369,6 +383,14 @@ async function fetchTableData() {
                     queryParams.append(`filter_${col}`, val);
                 }
             }
+        }
+        
+        // Append relation filter
+        if (state.filters.rel_filter) {
+            queryParams.append('rel_filter_type', state.filters.rel_filter.type);
+            queryParams.append('rel_filter_table', state.filters.rel_filter.table);
+            queryParams.append('rel_filter_col', state.filters.rel_filter.col);
+            queryParams.append('rel_filter_other_col', state.filters.rel_filter.other_col);
         }
         
         const data = await apiCall(`/api/tables/${state.activeTable}?${queryParams}`);
@@ -434,6 +456,12 @@ function renderDataGrid() {
                             queryParams.append(`filter_${col}`, val);
                         }
                     }
+                }
+                if (state.filters.rel_filter) {
+                    queryParams.append('rel_filter_type', state.filters.rel_filter.type);
+                    queryParams.append('rel_filter_table', state.filters.rel_filter.table);
+                    queryParams.append('rel_filter_col', state.filters.rel_filter.col);
+                    queryParams.append('rel_filter_other_col', state.filters.rel_filter.other_col);
                 }
                 const data = await apiCall(`/api/tables/${state.activeTable}/rowids?${queryParams}`);
                 state.selectedRowIds = data.rowids;
@@ -665,6 +693,22 @@ function initTableViewerEvents() {
         state.filters.page = 1;
         fetchTableData();
     });
+    
+    // 2b. Relation Filter Select
+    const relFilterSelect = document.getElementById('relation-filter-select');
+    if (relFilterSelect) {
+        relFilterSelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val) {
+                state.filters.rel_filter = JSON.parse(val);
+            } else {
+                state.filters.rel_filter = null;
+            }
+            state.filters.page = 1; // Reset page on filter change
+            state.selectedRowIds = []; // Reset selected rowids on filter change
+            fetchTableData();
+        });
+    }
     
     // 3. Dropdown Trigger
     const dropdown = document.querySelector('.dropdown-trigger');
@@ -1454,6 +1498,103 @@ async function executeBulkUpdate(column, value) {
         console.error('Bulk update error:', err);
     } finally {
         hideLoader();
+    }
+}
+
+// Rebuild and update the relation filter dropdown options
+async function updateRelationFiltersDropdown() {
+    const wrapper = document.getElementById('relation-filter-wrapper');
+    const select = document.getElementById('relation-filter-select');
+    
+    if (!state.activeTable || !wrapper || !select) {
+        if (wrapper) wrapper.classList.add('hidden');
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/api/relations');
+        const relations = data.relations;
+        
+        // Find relations involving active table
+        const activeRelations = relations.filter(r => r.child_table === state.activeTable || r.parent_table === state.activeTable);
+        
+        if (activeRelations.length === 0) {
+            wrapper.classList.add('hidden');
+            state.filters.rel_filter = null;
+            select.innerHTML = '<option value="">Tüm Kayıtlar</option>';
+            return;
+        }
+        
+        select.innerHTML = '<option value="">Tüm Kayıtlar</option>';
+        
+        activeRelations.forEach(r => {
+            if (r.child_table === state.activeTable) {
+                // Active table is the child table. E.g. T.child_column -> parent_table.parent_column
+                // Matched Option
+                const optMatch = document.createElement('option');
+                optMatch.value = JSON.stringify({
+                    type: 'matched',
+                    table: r.parent_table,
+                    col: r.child_column,
+                    other_col: r.parent_column
+                });
+                optMatch.textContent = `Eşleşen: [${r.child_column} -> ${r.parent_table}.${r.parent_column}]`;
+                select.appendChild(optMatch);
+                
+                // Unmatched Option
+                const optUnmatch = document.createElement('option');
+                optUnmatch.value = JSON.stringify({
+                    type: 'unmatched',
+                    table: r.parent_table,
+                    col: r.child_column,
+                    other_col: r.parent_column
+                });
+                optUnmatch.textContent = `Eşleşmeyen: [${r.child_column} -> ${r.parent_table}.${r.parent_column}]`;
+                select.appendChild(optUnmatch);
+            } else {
+                // Active table is the parent table. E.g. child_table.child_column -> T.parent_column
+                // Matched Option
+                const optMatch = document.createElement('option');
+                optMatch.value = JSON.stringify({
+                    type: 'matched',
+                    table: r.child_table,
+                    col: r.parent_column,
+                    other_col: r.child_column
+                });
+                optMatch.textContent = `Eşleşen: [${r.parent_column} <- ${r.child_table}.${r.child_column}]`;
+                select.appendChild(optMatch);
+                
+                // Unmatched Option
+                const optUnmatch = document.createElement('option');
+                optUnmatch.value = JSON.stringify({
+                    type: 'unmatched',
+                    table: r.child_table,
+                    col: r.parent_column,
+                    other_col: r.child_column
+                });
+                optUnmatch.textContent = `Eşleşmeyen: [${r.parent_column} <- ${r.child_table}.${r.child_column}]`;
+                select.appendChild(optUnmatch);
+            }
+        });
+        
+        // Restore value if still valid
+        if (state.filters.rel_filter) {
+            const currentStr = JSON.stringify(state.filters.rel_filter);
+            const exists = Array.from(select.options).some(opt => opt.value === currentStr);
+            if (exists) {
+                select.value = currentStr;
+            } else {
+                state.filters.rel_filter = null;
+                select.value = '';
+            }
+        } else {
+            select.value = '';
+        }
+        
+        wrapper.classList.remove('hidden');
+    } catch (err) {
+        console.error('Update relation filters error:', err);
+        wrapper.classList.add('hidden');
     }
 }
 
