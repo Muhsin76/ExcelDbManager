@@ -855,19 +855,73 @@ def export_table(table_name):
     try:
         table_name = sanitize_name(table_name)
         export_format = request.args.get('format', 'csv').lower()
+        search = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort_by', '').strip()
+        sort_order = request.args.get('sort_order', 'asc').lower()
         
+        # Relation filters
+        rel_filter_type = request.args.get('rel_filter_type', '').strip()
+        rel_filter_table = request.args.get('rel_filter_table', '').strip()
+        rel_filter_col = request.args.get('rel_filter_col', '').strip()
+        rel_filter_other_col = request.args.get('rel_filter_other_col', '').strip()
+        
+        if sort_order not in ['asc', 'desc']:
+            sort_order = 'asc'
+            
         conn = get_db_connection()
         cursor = conn.cursor()
         
         # Get column names
         cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = [col['name'] for col in cursor.fetchall()]
+        columns_info = cursor.fetchall()
+        columns = [col['name'] for col in columns_info]
         
         if not columns:
             conn.close()
             return "Table not found", 404
             
-        cursor.execute(f"SELECT * FROM {table_name};")
+        # Build search condition
+        where_clauses = []
+        query_params = []
+        
+        if search:
+            search_conditions = []
+            for col in columns:
+                search_conditions.append(f"CAST({col} AS TEXT) LIKE ?")
+                query_params.append(f"%{search}%")
+            where_clauses.append("(" + " OR ".join(search_conditions) + ")")
+            
+        # Sütun bazlı filtreleme (Column-specific filters)
+        for col in columns:
+            col_filter = request.args.get(f"filter_{col}", "").strip()
+            if col_filter:
+                where_clauses.append(f"CAST({col} AS TEXT) LIKE ?")
+                query_params.append(f"%{col_filter}%")
+                
+        # İlişki bazlı filtreleme (Relation filters: matched/unmatched)
+        if rel_filter_type and rel_filter_table and rel_filter_col and rel_filter_other_col:
+            rel_filter_table = sanitize_name(rel_filter_table)
+            rel_filter_col = sanitize_name(rel_filter_col)
+            rel_filter_other_col = sanitize_name(rel_filter_other_col)
+            
+            if rel_filter_type == 'matched':
+                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+            elif rel_filter_type == 'unmatched':
+                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                
+        where_clause = ""
+        if where_clauses:
+            where_clause = " WHERE " + " AND ".join(where_clauses)
+            
+        # Build sort clause
+        sort_clause = ""
+        if sort_by and sort_by in columns:
+            sort_clause = f" ORDER BY {sort_by} {sort_order.upper()}"
+        else:
+            # Default to ordering by rowid to preserve insertion order
+            sort_clause = " ORDER BY rowid ASC"
+            
+        cursor.execute(f"SELECT * FROM {table_name}{where_clause}{sort_clause};", query_params)
         rows = [list(row) for row in cursor.fetchall()]
         conn.close()
         
@@ -1039,14 +1093,35 @@ def rebuild_table_schema(table_name, col_modifiers=None, new_fks=None, remove_fk
         cursor.execute("PRAGMA foreign_key_check;")
         violations = cursor.fetchall()
         if violations:
-            viol_details = []
             for v in violations:
-                cursor.execute(f"SELECT * FROM {v[0]} WHERE rowid = ?;", (v[1],))
-                row_res = cursor.fetchone()
-                row_data = dict(row_res) if row_res else {}
-                viol_details.append(f"Tablo '{v[0]}' satır ID {v[1]} (Değerler: {row_data}) -> Referans '{v[2]}' bulunamadı.")
+                child_table = v[0]
+                row_id = v[1]
+                parent_table = v[2]
+                fk_id = v[3]
+                
+                # Query foreign key details to identify the child column name
+                cursor.execute(f"PRAGMA foreign_key_list({child_table});")
+                fk_list = [dict(row) for row in cursor.fetchall()]
+                child_col = None
+                for fk in fk_list:
+                    if fk['id'] == fk_id:
+                        child_col = fk['from']
+                        break
+                
+                if child_col:
+                    cursor.execute(f"UPDATE {child_table} SET {child_col} = NULL WHERE rowid = ?;", (row_id,))
             
-            raise Exception("Yabancı anahtar kısıtlaması ihlal edildi. Mevcut verilerde uyumsuzluk var:\n" + "\n".join(viol_details))
+            # Verify again after setting violating values to NULL
+            cursor.execute("PRAGMA foreign_key_check;")
+            still_violations = cursor.fetchall()
+            if still_violations:
+                viol_details = []
+                for v in still_violations:
+                    cursor.execute(f"SELECT * FROM {v[0]} WHERE rowid = ?;", (v[1],))
+                    row_res = cursor.fetchone()
+                    row_data = dict(row_res) if row_res else {}
+                    viol_details.append(f"Tablo '{v[0]}' satır ID {v[1]} (Değerler: {row_data}) -> Referans '{v[2]}' bulunamadı.")
+                raise Exception("Yabancı anahtar kısıtlaması ihlal edildi ve temizlenemedi:\n" + "\n".join(viol_details))
             
         conn.commit()
         return True

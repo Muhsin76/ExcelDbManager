@@ -407,8 +407,11 @@ async function fetchTableData() {
         renderPagination();
         
         // Update external downloads buttons
-        document.getElementById('export-excel-btn').href = `/api/tables/${state.activeTable}/export?format=excel`;
-        document.getElementById('export-csv-btn').href = `/api/tables/${state.activeTable}/export?format=csv`;
+        const exportParams = new URLSearchParams(queryParams);
+        exportParams.delete('page');
+        exportParams.delete('per_page');
+        document.getElementById('export-excel-btn').href = `/api/tables/${state.activeTable}/export?format=excel&${exportParams.toString()}`;
+        document.getElementById('export-csv-btn').href = `/api/tables/${state.activeTable}/export?format=csv&${exportParams.toString()}`;
     } catch (err) {
         console.error('Fetch table data error:', err);
     } finally {
