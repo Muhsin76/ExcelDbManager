@@ -73,6 +73,37 @@ def make_unique_column_names(column_names):
             unique_names.append(sanitized)
     return unique_names
 
+# Helper to translate database errors to user-friendly messages in Turkish
+def translate_db_error(e):
+    err_msg = str(e)
+    
+    # UNIQUE veya PRIMARY KEY kısıtlaması hatası
+    if "UNIQUE constraint failed" in err_msg:
+        parts = err_msg.split(":")
+        col_detail = parts[-1].strip() if len(parts) > 1 else ""
+        display_col = col_detail.replace("_new", "")
+        return (
+            f"Benzersizlik (Unique) Hatası: '{display_col}' sütununda zaten mevcut olan (yinelenen) bir değer eklenmeye veya oluşturulmaya çalışıldı. "
+            f"İlişki kurmaya çalışıyorsanız: Tanımladığınız ana tablonun (parent table) ana sütunundaki verilerin tamamen benzersiz olması gerekir. "
+            f"Lütfen '{display_col}' sütunundaki yinelenen verileri temizleyin ya da ilişkiyi kurarken Ana Tablo ile İlişkili Tablo seçimlerinin yönünü kontrol edin."
+        )
+        
+    # FOREIGN KEY kısıtlaması hatası
+    if "FOREIGN KEY constraint failed" in err_msg:
+        return (
+            "İlişki (Foreign Key) Hatası: İlişkili tablolardaki veri bütünlüğü kuralı ihlal edildi. "
+            "Girdiğiniz değer ana tabloda mevcut olmayabilir ya da silmek/güncellemek istediğiniz veri diğer bir tablo tarafından referans alınıyor olabilir."
+        )
+        
+    # NOT NULL kısıtlaması hatası
+    if "NOT NULL constraint failed" in err_msg:
+        parts = err_msg.split(":")
+        col_detail = parts[-1].strip() if len(parts) > 1 else ""
+        display_col = col_detail.replace("_new", "")
+        return f"Boş Bırakılamaz Hatası: '{display_col}' sütunu boş bırakılamaz. Lütfen bu alanı doldurun."
+        
+    return err_msg
+
 # Helper to guess data type from a list of values
 def guess_data_type(values):
     if not values:
