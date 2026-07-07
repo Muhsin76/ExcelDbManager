@@ -428,7 +428,7 @@ def insert_row(table_name):
         
         return jsonify({'success': True, 'message': 'Row inserted successfully.', 'rowid': new_rowid})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 6. Update row
 @app.route('/api/tables/<table_name>/row/<int:rowid>', methods=['PUT'])
@@ -461,7 +461,7 @@ def update_row(table_name, rowid):
         
         return jsonify({'success': True, 'message': 'Row updated successfully.'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 7. Delete row
 @app.route('/api/tables/<table_name>/row/<int:rowid>', methods=['DELETE'])
@@ -474,7 +474,7 @@ def delete_row(table_name, rowid):
         conn.close()
         return jsonify({'success': True, 'message': 'Row deleted successfully.'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 7a. Bulk delete rows
 @app.route('/api/tables/<table_name>/rows/bulk-delete', methods=['POST'])
@@ -497,7 +497,7 @@ def bulk_delete_rows(table_name):
         
         return jsonify({'success': True, 'message': f'{len(rowids)} rows deleted successfully.'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 7b. Bulk update rows
 @app.route('/api/tables/<table_name>/rows/bulk-update', methods=['POST'])
@@ -532,7 +532,7 @@ def bulk_update_rows(table_name):
         
         return jsonify({'success': True, 'message': f'{len(rowids)} rows updated successfully.'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 8. Parse uploaded CSV/Excel file for preview
 @app.route('/api/parse-file', methods=['POST'])
@@ -878,7 +878,7 @@ def import_file():
         # Cleanup temp file on failure
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 10. Export database table as CSV or Excel
 @app.route('/api/tables/<table_name>/export', methods=['GET'])
@@ -1241,6 +1241,22 @@ def create_relation():
         
         # If it doesn't have unique constraint, make it PRIMARY KEY or UNIQUE
         if not has_unique_constraint:
+            # Check for duplicate values first to provide a friendly error
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT {parent_column}, COUNT(*) as cnt FROM {parent_table} WHERE {parent_column} IS NOT NULL GROUP BY {parent_column} HAVING cnt > 1 LIMIT 5;")
+            duplicates = cursor.fetchall()
+            conn.close()
+            
+            if duplicates:
+                dup_vals = ", ".join([f"'{str(row[0])}'" for row in duplicates])
+                return jsonify({
+                    'success': False, 
+                    'error': f"Ana tablo olarak seçtiğiniz '{parent_table}' tablosunun '{parent_column}' sütununda yinelenen (kopya) veriler bulunuyor (Örn: {dup_vals}). "
+                             f"Veritabanı ilişkisi kurabilmek için bu sütundaki tüm değerlerin benzersiz olması gerekir. "
+                             f"Lütfen '{parent_column}' sütunundaki yinelenen verileri temizleyin veya ilişki yönünün (Ana Tablo / İlişkili Tablo) doğru olduğunu kontrol edin."
+                }), 400
+                
             col_modifiers = {parent_column: "PRIMARY KEY" if not any(c['pk'] > 0 for c in parent_cols) else "UNIQUE"}
             rebuild_table_schema(parent_table, col_modifiers=col_modifiers)
             
@@ -1257,7 +1273,7 @@ def create_relation():
         return jsonify({'success': True, 'message': f"'{child_table}.{child_column}' -> '{parent_table}.{parent_column}' ilişkisi başarıyla kuruldu."})
         
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 13. Delete a relation
 @app.route('/api/relations', methods=['DELETE'])
