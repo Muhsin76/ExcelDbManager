@@ -1198,8 +1198,28 @@ def get_relations():
                     'parent_table': fk['table'],
                     'parent_column': fk['to'],
                     'on_update': fk['on_update'],
-                    'on_delete': fk['on_delete']
+                    'on_delete': fk['on_delete'],
+                    'is_logical': False
                 })
+                
+        # Load virtual/logical relations
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='_sys_logical_relations';")
+        if cursor.fetchone():
+            cursor.execute("SELECT parent_table, parent_column, child_table, child_column, on_update, on_delete FROM _sys_logical_relations;")
+            logical_fks = cursor.fetchall()
+            for row in logical_fks:
+                # Only include if both tables still exist in the database
+                if row['parent_table'] in tables and row['child_table'] in tables:
+                    relations.append({
+                        'child_table': row['child_table'],
+                        'child_column': row['child_column'],
+                        'parent_table': row['parent_table'],
+                        'parent_column': row['parent_column'],
+                        'on_update': row['on_update'],
+                        'on_delete': row['on_delete'],
+                        'is_logical': True
+                    })
+                    
         conn.close()
         return jsonify({'success': True, 'relations': relations})
     except Exception as e:
@@ -1216,6 +1236,7 @@ def create_relation():
         child_column = sanitize_name(data.get('child_column'))
         on_update = data.get('on_update', 'CASCADE').upper()
         on_delete = data.get('on_delete', 'CASCADE').upper()
+        is_logical = data.get('is_logical', False)
         
         if on_update not in ['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION', 'SET DEFAULT']:
             on_update = 'CASCADE'
@@ -1224,6 +1245,22 @@ def create_relation():
             
         if not all([parent_table, parent_column, child_table, child_column]):
             return jsonify({'success': False, 'error': 'Tüm parametreler gereklidir.'}), 400
+            
+        if is_logical:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO _sys_logical_relations 
+                    (parent_table, parent_column, child_table, child_column, on_update, on_delete)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                """, (parent_table, parent_column, child_table, child_column, on_update, on_delete))
+                conn.commit()
+            except Exception as e:
+                conn.close()
+                return jsonify({'success': False, 'error': f"Sanal ilişki kaydedilirken hata oluştu: {str(e)}"}), 500
+            conn.close()
+            return jsonify({'success': True, 'message': f"'{child_table}.{child_column}' -> '{parent_table}.{parent_column}' sanal ilişkisi başarıyla kuruldu."})
             
         # Step 1: Ensure parent_column is UNIQUE or PRIMARY KEY in parent_table
         conn = get_db_connection()
@@ -1301,6 +1338,25 @@ def delete_relation_route():
         
         if not all([parent_table, parent_column, child_table, child_column]):
             return jsonify({'success': False, 'error': 'Tüm parametreler gereklidir.'}), 400
+            
+        # Check if it exists in _sys_logical_relations and delete
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='_sys_logical_relations';")
+        has_logical_table = cursor.fetchone() is not None
+        deleted_logical = False
+        if has_logical_table:
+            cursor.execute("""
+                DELETE FROM _sys_logical_relations 
+                WHERE parent_table = ? AND parent_column = ? AND child_table = ? AND child_column = ?;
+            """, (parent_table, parent_column, child_table, child_column))
+            if cursor.rowcount > 0:
+                deleted_logical = True
+            conn.commit()
+        conn.close()
+        
+        if deleted_logical:
+            return jsonify({'success': True, 'message': 'Sanal ilişki başarıyla kaldırıldı.'})
             
         remove_fk = {
             'child_column': child_column,
