@@ -29,8 +29,22 @@ def get_db_connection():
 
 def init_db():
     # Database is automatically created on connection.
-    # We can create a system log table if needed, but not strictly necessary.
+    # Create the _sys_logical_relations table for virtual relationships
     conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS _sys_logical_relations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            parent_table TEXT NOT NULL,
+            parent_column TEXT NOT NULL,
+            child_table TEXT NOT NULL,
+            child_column TEXT NOT NULL,
+            on_update TEXT DEFAULT 'CASCADE',
+            on_delete TEXT DEFAULT 'CASCADE',
+            UNIQUE(parent_table, parent_column, child_table, child_column)
+        );
+    """)
+    conn.commit()
     conn.close()
 
 init_db()
