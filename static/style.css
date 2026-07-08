@@ -2046,6 +2046,15 @@ body {
     border-radius: 4px;
 }
 
+.badge-logical {
+    background-color: var(--warning) !important;
+    color: #ffffff !important;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
 /* Relationship Filter Group Styles */
 .relation-filter-group {
     display: flex;
