@@ -1786,7 +1786,9 @@ function renderColumnsList(role, tableName, relations) {
     tableInfo.columns.forEach(col => {
         const colType = tableInfo.column_types[col] || 'TEXT';
         
-        const isParentInRels = relations.some(r => r.parent_table === tableName && r.parent_column === col);
+        const relAssociated = relations.find(r => r.parent_table === tableName && r.parent_column === col);
+        const isParentInRels = !!relAssociated;
+        const isLogicalParent = relAssociated && relAssociated.is_logical;
         const isChildInRels = relations.some(r => r.child_table === tableName && r.child_column === col);
         
         const item = document.createElement('div');
@@ -1795,7 +1797,11 @@ function renderColumnsList(role, tableName, relations) {
         
         let badgesHtml = '';
         if (isParentInRels) {
-            badgesHtml += ' <span class="badge-pk">PK/UNI</span>';
+            if (isLogicalParent) {
+                badgesHtml += ' <span class="badge-logical">Sanal</span>';
+            } else {
+                badgesHtml += ' <span class="badge-pk">PK/UNI</span>';
+            }
         }
         if (isChildInRels) {
             badgesHtml += ' <span class="badge-fk">FK</span>';
@@ -1912,6 +1918,47 @@ async function createRelation() {
         
     } catch (err) {
         console.error('Relation creation error:', err);
+        const errMsg = err.message || '';
+        if (errMsg.includes('yinelenen') || errMsg.includes('Unique') || errMsg.includes('kopya') || errMsg.includes('UNIQUE')) {
+            // Suggest creating a logical relation
+            const confirmLogical = confirm(
+                "Ana sütunda yinelenen (tekrar eden) veriler bulunduğundan fiziksel SQL ilişkisi kurulamaz.\n\n" +
+                "Bunun yerine, verileri filtreleyebilmeniz için kısıtlama dayatmayan 'Sanal İlişki (Logical Relation)' oluşturmak ister misiniz?\n" +
+                "(Bu seçenek verilerinizi veya tablolarınızı değiştirmez, ancak tablolar arası filtrelemeyi kullanmanızı sağlar.)"
+            );
+            if (confirmLogical) {
+                showLoader('Sanal ilişki oluşturuluyor...');
+                try {
+                    const response = await fetch('/api/relations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            parent_table: pTable,
+                            parent_column: pCol,
+                            child_table: cTable,
+                            child_column: cCol,
+                            on_update: onUpdate,
+                            on_delete: onDelete,
+                            is_logical: true
+                        })
+                    });
+                    const resData = await response.json();
+                    if (response.ok && resData.success) {
+                        showToast(resData.message || 'Sanal ilişki başarıyla kuruldu.');
+                        await loadRelationsData();
+                        if (pTable) selectRelationTable('a', pTable);
+                        if (cTable) selectRelationTable('b', cTable);
+                    } else {
+                        showToast(resData.error || 'Sanal ilişki kurulurken bir hata oluştu.', 'error');
+                    }
+                } catch (subErr) {
+                    console.error('SubRelation error:', subErr);
+                    showToast('Sanal ilişki kurulumu başarısız oldu.', 'error');
+                } finally {
+                    hideLoader();
+                }
+            }
+        }
     } finally {
         hideLoader();
     }
@@ -1934,17 +1981,30 @@ function renderRelationsList(relations) {
     };
     
     relations.forEach(r => {
-        const deleteText = r.on_delete === 'CASCADE' ? 'Otomatik Sil' : (actionTranslation[r.on_delete] || r.on_delete);
-        const updateText = r.on_update === 'CASCADE' ? 'Otomatik Güncelle' : (actionTranslation[r.on_update] || r.on_update);
+        let deleteText, updateText, directionIcon, parentBadgeClass, childBadgeClass;
+        
+        if (r.is_logical) {
+            deleteText = 'Sanal (Filtreleme)';
+            updateText = 'Sanal (Filtreleme)';
+            directionIcon = '<i class="fa-solid fa-circle-nodes text-warning" title="Sanal İlişki (Veritabanı kısıtı yoktur)"></i>';
+            parentBadgeClass = 'badge-logical';
+            childBadgeClass = 'badge-fk';
+        } else {
+            deleteText = r.on_delete === 'CASCADE' ? 'Otomatik Sil' : (actionTranslation[r.on_delete] || r.on_delete);
+            updateText = r.on_update === 'CASCADE' ? 'Otomatik Güncelle' : (actionTranslation[r.on_update] || r.on_update);
+            directionIcon = '<i class="fa-solid fa-link text-indigo" title="Fiziksel SQL İlişkisi"></i>';
+            parentBadgeClass = 'badge-pk';
+            childBadgeClass = 'badge-fk';
+        }
         
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${r.parent_table}</strong></td>
-            <td><span class="badge badge-pk">${r.parent_column}</span></td>
-            <td class="text-center"><i class="fa-solid fa-link text-indigo"></i></td>
+            <td><span class="badge ${parentBadgeClass}">${r.parent_column}${r.is_logical ? ' (Sanal)' : ''}</span></td>
+            <td class="text-center">${directionIcon}</td>
             <td><strong>${r.child_table}</strong></td>
-            <td><span class="badge badge-fk">${r.child_column}</span></td>
-            <td><span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">${deleteText}</span></td>
+            <td><span class="badge ${childBadgeClass}">${r.child_column}</span></td>
+            <td><span class="badge" style="background: ${r.is_logical ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; color: ${r.is_logical ? 'var(--warning)' : 'var(--danger)'};">${deleteText}</span></td>
             <td><span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);">${updateText}</span></td>
             <td>
                 <button class="btn btn-danger btn-sm" onclick="deleteRelation('${r.child_table}', '${r.child_column}', '${r.parent_table}', '${r.parent_column}')">
