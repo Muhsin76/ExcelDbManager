@@ -1067,7 +1067,8 @@ def export_table(table_name):
         rows = [list(row) for row in cursor.fetchall()]
         conn.close()
         
-        export_filename = f"{table_name}_export.{export_format}"
+        ext = 'xlsx' if export_format == 'excel' else export_format
+        export_filename = f"{table_name}_export.{ext}"
         export_path = os.path.join(UPLOAD_FOLDER, export_filename)
         
         if export_format == 'csv':
