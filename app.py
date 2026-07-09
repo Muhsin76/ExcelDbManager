@@ -626,6 +626,7 @@ def parse_file():
         preview_rows = []
         
         if file_ext in ['xlsx', 'xls']:
+            wb = None
             try:
                 wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
                 sheets = wb.sheetnames
@@ -673,12 +674,20 @@ def parse_file():
                             preview_rows.append(row_dict)
                             
                         columns = columns_meta
-                wb.close()
             except Exception as e:
                 # Cleanup if parse failed
                 if os.path.exists(file_path):
-                    os.remove(file_path)
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
                 return jsonify({'success': False, 'error': f"Failed to parse Excel file: {str(e)}"}), 500
+            finally:
+                if wb:
+                    try:
+                        wb.close()
+                    except:
+                        pass
         else:
             # CSV file
             try:
@@ -733,6 +742,7 @@ def parse_file():
 # 8b. Preview Excel sheet change
 @app.route('/api/preview-sheet', methods=['GET'])
 def preview_sheet():
+    wb = None
     try:
         file_key = request.args.get('file_key')
         file_ext = request.args.get('file_ext')
@@ -788,7 +798,6 @@ def preview_sheet():
                 preview_rows.append(row_dict)
                 
             columns = columns_meta
-        wb.close()
             
         return jsonify({
             'success': True,
@@ -797,6 +806,12 @@ def preview_sheet():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if wb:
+            try:
+                wb.close()
+            except:
+                pass
 
 # 9. Import file contents to SQLite
 @app.route('/api/import-file', methods=['POST'])
@@ -826,24 +841,31 @@ def import_file():
         file_headers = []
         
         if file_ext in ['xlsx', 'xls']:
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            if not sheet_name:
-                sheet_name = wb.sheetnames[0]
-            sheet = wb[sheet_name]
-            
-            row_generator = sheet.iter_rows(values_only=True)
-            for row in row_generator:
-                if any(cell is not None for cell in row):
-                    if not file_headers:
-                        file_headers = make_unique_column_names(row)
-                    else:
-                        row_dict = {}
-                        for idx, val in enumerate(row):
-                            if idx < len(file_headers):
-                                # Convert dates/times to string for DB storage
-                                row_dict[file_headers[idx]] = val
-                        rows_to_insert.append(row_dict)
-            wb.close()
+            wb = None
+            try:
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                if not sheet_name:
+                    sheet_name = wb.sheetnames[0]
+                sheet = wb[sheet_name]
+                
+                row_generator = sheet.iter_rows(values_only=True)
+                for row in row_generator:
+                    if any(cell is not None for cell in row):
+                        if not file_headers:
+                            file_headers = make_unique_column_names(row)
+                        else:
+                            row_dict = {}
+                            for idx, val in enumerate(row):
+                                if idx < len(file_headers):
+                                    # Convert dates/times to string for DB storage
+                                    row_dict[file_headers[idx]] = val
+                            rows_to_insert.append(row_dict)
+            finally:
+                if wb:
+                    try:
+                        wb.close()
+                    except:
+                        pass
         else:
             # CSV
             with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
@@ -933,14 +955,20 @@ def import_file():
         
         # Cleanup temp file
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except:
+                pass
             
         return jsonify({'success': True, 'message': f"Imported {len(rows_to_insert)} rows into table '{table_name}' successfully."})
         
     except Exception as e:
         # Cleanup temp file on failure
         if file_path and os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except:
+                pass
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
 
 # 10. Export database table as CSV or Excel
