@@ -1679,6 +1679,37 @@ function initRelationsEvents() {
     document.getElementById('btn-create-relation').addEventListener('click', () => {
         createRelation();
     });
+
+    // Swap Tables Button
+    const btnSwap = document.getElementById('btn-swap-relation-tables');
+    if (btnSwap) {
+        btnSwap.addEventListener('click', swapRelationTables);
+    }
+}
+
+function swapRelationTables() {
+    const selectA = document.getElementById('relation-table-a');
+    const selectB = document.getElementById('relation-table-b');
+    
+    const valA = selectA.value;
+    const valB = selectB.value;
+    
+    if (!valA && !valB) return;
+    
+    selectA.value = valB;
+    selectB.value = valA;
+    
+    if (valB) {
+        selectRelationTable('a', valB);
+    } else {
+        resetRelationTableSelection('a');
+    }
+    
+    if (valA) {
+        selectRelationTable('b', valA);
+    } else {
+        resetRelationTableSelection('b');
+    }
 }
 
 async function loadRelationsData() {
@@ -2217,3 +2248,4 @@ window.autoSelectAndMatch = autoSelectAndMatch;
 window.exportTable = exportTable;
 window.closeExportModal = closeExportModal;
 window.confirmExportDownload = confirmExportDownload;
+window.swapRelationTables = swapRelationTables;
