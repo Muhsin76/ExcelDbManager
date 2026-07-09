@@ -195,8 +195,8 @@
                                                 <i class="fa-solid fa-download"></i> Dışa Aktar <i class="fa-solid fa-chevron-down text-xs"></i>
                                             </button>
                                             <div class="dropdown-content">
-                                                <a href="#" id="export-excel-btn"><i class="fa-solid fa-file-excel text-green"></i> Excel Olarak İndir (.xlsx)</a>
-                                                <a href="#" id="export-csv-btn"><i class="fa-solid fa-file-csv text-blue"></i> CSV Olarak İndir (.csv)</a>
+                                                <a href="#" onclick="exportTable('excel'); return false;" id="export-excel-btn"><i class="fa-solid fa-file-excel text-green"></i> Excel Olarak İndir (.xlsx)</a>
+                                                <a href="#" onclick="exportTable('csv'); return false;" id="export-csv-btn"><i class="fa-solid fa-file-csv text-blue"></i> CSV Olarak İndir (.csv)</a>
                                             </div>
                                         </div>
                                         <button class="btn btn-danger btn-sm" id="btn-delete-table">

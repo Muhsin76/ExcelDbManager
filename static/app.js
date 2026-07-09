@@ -410,13 +410,6 @@ async function fetchTableData() {
         
         renderDataGrid();
         renderPagination();
-        
-        // Update external downloads buttons
-        const exportParams = new URLSearchParams(queryParams);
-        exportParams.delete('page');
-        exportParams.delete('per_page');
-        document.getElementById('export-excel-btn').href = `/api/tables/${state.activeTable}/export?format=excel&${exportParams.toString()}`;
-        document.getElementById('export-csv-btn').href = `/api/tables/${state.activeTable}/export?format=csv&${exportParams.toString()}`;
     } catch (err) {
         console.error('Fetch table data error:', err);
     } finally {
@@ -2143,6 +2136,48 @@ function autoSelectAndMatch(parentCol, childCol) {
     showToast('Önerilen sütunlar seçildi. İlişkiyi Tanımla butonuna basabilirsiniz.');
 }
 
+// Dynamic export function that reads latest input values directly from the DOM
+function exportTable(format) {
+    if (!state.activeTable) return;
+    
+    // Get the current search input value
+    const searchInput = document.getElementById('table-search-input');
+    const searchVal = searchInput ? searchInput.value.trim() : '';
+    
+    const queryParams = new URLSearchParams({
+        format: format,
+        search: searchVal,
+        sort_by: state.filters.sort_by || '',
+        sort_order: state.filters.sort_order || 'asc'
+    });
+    
+    // Gather all current values from column filter inputs directly from the DOM
+    document.querySelectorAll('.column-filter-input').forEach(input => {
+        const col = input.getAttribute('data-col');
+        const val = input.value.trim();
+        if (col && val) {
+            queryParams.append(`filter_${col}`, val);
+        }
+    });
+    
+    // Append relation filter if active
+    const relFilterSelect = document.getElementById('relation-filter-select');
+    if (relFilterSelect && relFilterSelect.value) {
+        try {
+            const relFilter = JSON.parse(relFilterSelect.value);
+            queryParams.append('rel_filter_type', relFilter.type);
+            queryParams.append('rel_filter_table', relFilter.table);
+            queryParams.append('rel_filter_col', relFilter.col);
+            queryParams.append('rel_filter_other_col', relFilter.other_col);
+        } catch (e) {
+            console.error('Error parsing relation filter:', e);
+        }
+    }
+    
+    // Navigate to the export URL
+    window.location.href = `/api/tables/${state.activeTable}/export?${queryParams.toString()}`;
+}
+
 // Expose globally for inline html onclicks
 window.deleteRelation = deleteRelation;
 window.initRelationsEvents = initRelationsEvents;
@@ -2150,3 +2185,4 @@ window.loadRelationsData = loadRelationsData;
 window.selectRelationTable = selectRelationTable;
 window.createRelation = createRelation;
 window.autoSelectAndMatch = autoSelectAndMatch;
+window.exportTable = exportTable;
