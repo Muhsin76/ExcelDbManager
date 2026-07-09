@@ -85,6 +85,7 @@ def make_unique_column_names(column_names):
         else:
             seen[key] = 0
             unique_names.append(sanitized)
+    return unique_names
 # Helper to normalize values in Python for relation analysis
 def normalize_val(val):
     if val is None:
