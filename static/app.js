@@ -210,15 +210,20 @@ function hideLoader() {
 
 // Custom Fetch Wrapper
 async function apiCall(url, options = {}) {
+    const silent = options.silentError || false;
+    const fetchOptions = { ...options };
+    delete fetchOptions.silentError;
     try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, fetchOptions);
         const data = await response.json();
         if (!response.ok || !data.success) {
             throw new Error(data.error || 'Bilinmeyen sunucu hatası.');
         }
         return data;
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!silent) {
+            showToast(err.message, 'error');
+        }
         throw err;
     }
 }
@@ -1906,8 +1911,10 @@ async function createRelation() {
                 child_table: cTable,
                 child_column: cCol,
                 on_update: onUpdate,
-                on_delete: onDelete
-            })
+                on_delete: onDelete,
+                is_logical: false
+            }),
+            silentError: true
         });
         
         showToast(res.message);
@@ -1964,6 +1971,8 @@ async function createRelation() {
                     hideLoader();
                 }
             }
+        } else {
+            showToast(errMsg, 'error');
         }
     } finally {
         hideLoader();
