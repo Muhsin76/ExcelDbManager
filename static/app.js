@@ -1919,13 +1919,19 @@ async function createRelation() {
     } catch (err) {
         console.error('Relation creation error:', err);
         const errMsg = err.message || '';
-        if (errMsg.includes('yinelenen') || errMsg.includes('Unique') || errMsg.includes('kopya') || errMsg.includes('UNIQUE')) {
-            // Suggest creating a logical relation
-            const confirmLogical = confirm(
-                "Ana sütunda yinelenen (tekrar eden) veriler bulunduğundan fiziksel SQL ilişkisi kurulamaz.\n\n" +
-                "Bunun yerine, verileri filtreleyebilmeniz için kısıtlama dayatmayan 'Sanal İlişki (Logical Relation)' oluşturmak ister misiniz?\n" +
-                "(Bu seçenek verilerinizi veya tablolarınızı değiştirmez, ancak tablolar arası filtrelemeyi kullanmanızı sağlar.)"
-            );
+        if (errMsg.includes('yinelenen') || errMsg.includes('Unique') || errMsg.includes('kopya') || errMsg.includes('UNIQUE') || 
+            errMsg.includes('ihlal') || errMsg.includes('bulunmamaktadır') || errMsg.includes('Foreign key')) {
+            
+            let confirmMsg = "";
+            if (errMsg.includes('yinelenen') || errMsg.includes('Unique') || errMsg.includes('kopya') || errMsg.includes('UNIQUE')) {
+                confirmMsg = "Ana sütunda yinelenen (tekrar eden) veriler bulunduğundan fiziksel SQL ilişkisi kurulamaz.\n\n";
+            } else {
+                confirmMsg = "İlişkili tablodaki bazı veriler ana tabloda bulunmadığından (yabancı anahtar ihlali) fiziksel SQL ilişkisi kurulamaz.\n\n";
+            }
+            confirmMsg += "Bunun yerine, verileri filtreleyebilmeniz için kısıtlama dayatmayan 'Sanal İlişki (Logical Relation)' oluşturmak ister misiniz?\n" +
+                          "(Bu seçenek verilerinizi veya tablolarınızı değiştirmez, ancak tablolar arası filtrelemeyi kullanmanızı sağlar.)";
+                          
+            const confirmLogical = confirm(confirmMsg);
             if (confirmLogical) {
                 showLoader('Sanal ilişki oluşturuluyor...');
                 try {
@@ -1944,12 +1950,12 @@ async function createRelation() {
                     });
                     const resData = await response.json();
                     if (response.ok && resData.success) {
-                        showToast(resData.message || 'Sanal ilişki başarıyla kuruldu.');
-                        await loadRelationsData();
-                        if (pTable) selectRelationTable('a', pTable);
-                        if (cTable) selectRelationTable('b', cTable);
+                         showToast(resData.message || 'Sanal ilişki başarıyla kuruldu.');
+                         await loadRelationsData();
+                         if (pTable) selectRelationTable('a', pTable);
+                         if (cTable) selectRelationTable('b', cTable);
                     } else {
-                        showToast(resData.error || 'Sanal ilişki kurulurken bir hata oluştu.', 'error');
+                         showToast(resData.error || 'Sanal ilişki kurulurken bir hata oluştu.', 'error');
                     }
                 } catch (subErr) {
                     console.error('SubRelation error:', subErr);
