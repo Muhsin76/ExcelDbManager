@@ -292,9 +292,9 @@ def get_table_data(table_name):
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
             if rel_filter_type == 'matched':
-                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -387,9 +387,9 @@ def get_table_rowids(table_name):
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
             if rel_filter_type == 'matched':
-                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -950,9 +950,9 @@ def export_table(table_name):
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
             if rel_filter_type == 'matched':
-                where_clauses.append(f"{rel_filter_col} IN (SELECT {rel_filter_other_col} FROM {rel_filter_table})")
+                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR {rel_filter_col} NOT IN (SELECT {rel_filter_other_col} FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -1138,7 +1138,8 @@ def rebuild_table_schema(table_name, col_modifiers=None, new_fks=None, remove_fk
         cursor.execute("PRAGMA foreign_key_check;")
         violations = cursor.fetchall()
         if violations:
-            for v in violations:
+            viol_details = []
+            for v in violations[:5]:
                 child_table = v[0]
                 row_id = v[1]
                 parent_table = v[2]
@@ -1154,19 +1155,24 @@ def rebuild_table_schema(table_name, col_modifiers=None, new_fks=None, remove_fk
                         break
                 
                 if child_col:
-                    cursor.execute(f"UPDATE {child_table} SET {child_col} = NULL WHERE rowid = ?;", (row_id,))
+                    cursor.execute(f"SELECT {child_col} FROM {child_table} WHERE rowid = ?;", (row_id,))
+                    val_row = cursor.fetchone()
+                    viol_val = val_row[0] if val_row else 'Bilinmeyen'
+                    viol_details.append(
+                        f"'{child_table}.{child_col}' sütunundaki '{viol_val}' değeri, "
+                        f"Ana '{parent_table}' tablosunda bulunmamaktadır."
+                    )
+                else:
+                    viol_details.append(f"Tablo '{child_table}' satır ID {row_id} -> '{parent_table}' tablosunda referans bulunamadı.")
             
-            # Verify again after setting violating values to NULL
-            cursor.execute("PRAGMA foreign_key_check;")
-            still_violations = cursor.fetchall()
-            if still_violations:
-                viol_details = []
-                for v in still_violations:
-                    cursor.execute(f"SELECT * FROM {v[0]} WHERE rowid = ?;", (v[1],))
-                    row_res = cursor.fetchone()
-                    row_data = dict(row_res) if row_res else {}
-                    viol_details.append(f"Tablo '{v[0]}' satır ID {v[1]} (Değerler: {row_data}) -> Referans '{v[2]}' bulunamadı.")
-                raise Exception("Yabancı anahtar kısıtlaması ihlal edildi ve temizlenemedi:\n" + "\n".join(viol_details))
+            if len(violations) > 5:
+                viol_details.append(f"...ve {len(violations) - 5} adet daha uyuşmayan kayıt var.")
+                
+            raise Exception(
+                "Yabancı anahtar kısıtlaması ihlal edildi. "
+                "İlişkili (Child) tablodaki bazı veriler Ana (Parent) tabloda mevcut değildir:\n" + 
+                "\n".join(viol_details)
+            )
             
         conn.commit()
         return True
