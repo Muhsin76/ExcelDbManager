@@ -85,7 +85,38 @@ def make_unique_column_names(column_names):
         else:
             seen[key] = 0
             unique_names.append(sanitized)
-    return unique_names
+# Helper to normalize values in Python for relation analysis
+def normalize_val(val):
+    if val is None:
+        return ""
+    val_str = str(val).strip().lower()
+    if not val_str:
+        return ""
+    # Try to parse as float to normalize numeric strings (e.g. "1.0" -> "1", "01" -> "1")
+    try:
+        # Avoid treating general text as float (e.g. "12a" or "1.2.3")
+        if val_str.replace('.', '', 1).replace('-', '', 1).isdigit():
+            val_float = float(val_str)
+            if val_float.is_integer():
+                return str(int(val_float))
+            return str(val_float)
+    except Exception:
+        pass
+    return val_str
+
+# Helper to generate robust SQL expression for column comparison
+def sql_clean_column(col_name):
+    return f"""LOWER(TRIM(
+        CASE 
+            WHEN "{col_name}" NOT GLOB '*[^0-9.-]*' AND "{col_name}" GLOB '*[0-9]*' THEN
+                CASE 
+                    WHEN CAST("{col_name}" AS REAL) = CAST("{col_name}" AS INTEGER) THEN CAST(CAST("{col_name}" AS INTEGER) AS TEXT)
+                    ELSE CAST(CAST("{col_name}" AS REAL) AS TEXT)
+                END
+            ELSE 
+                CAST("{col_name}" AS TEXT)
+        END
+    ))"""
 
 # Helper to translate database errors to user-friendly messages in Turkish
 def translate_db_error(e):
@@ -291,10 +322,13 @@ def get_table_data(table_name):
             rel_filter_col = sanitize_name(rel_filter_col)
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
+            clean_col = sql_clean_column(rel_filter_col)
+            clean_other = sql_clean_column(rel_filter_other_col)
+            
             if rel_filter_type == 'matched':
-                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
+                where_clauses.append(f"{clean_col} IN (SELECT {clean_other} FROM \"{rel_filter_table}\")")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"(\"{rel_filter_col}\" IS NULL OR {clean_col} NOT IN (SELECT {clean_other} FROM \"{rel_filter_table}\" WHERE \"{rel_filter_other_col}\" IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -386,10 +420,13 @@ def get_table_rowids(table_name):
             rel_filter_col = sanitize_name(rel_filter_col)
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
+            clean_col = sql_clean_column(rel_filter_col)
+            clean_other = sql_clean_column(rel_filter_other_col)
+            
             if rel_filter_type == 'matched':
-                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
+                where_clauses.append(f"{clean_col} IN (SELECT {clean_other} FROM \"{rel_filter_table}\")")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"(\"{rel_filter_col}\" IS NULL OR {clean_col} NOT IN (SELECT {clean_other} FROM \"{rel_filter_table}\" WHERE \"{rel_filter_other_col}\" IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -949,10 +986,13 @@ def export_table(table_name):
             rel_filter_col = sanitize_name(rel_filter_col)
             rel_filter_other_col = sanitize_name(rel_filter_other_col)
             
+            clean_col = sql_clean_column(rel_filter_col)
+            clean_other = sql_clean_column(rel_filter_other_col)
+            
             if rel_filter_type == 'matched':
-                where_clauses.append(f"CAST({rel_filter_col} AS TEXT) IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table})")
+                where_clauses.append(f"{clean_col} IN (SELECT {clean_other} FROM \"{rel_filter_table}\")")
             elif rel_filter_type == 'unmatched':
-                where_clauses.append(f"({rel_filter_col} IS NULL OR CAST({rel_filter_col} AS TEXT) NOT IN (SELECT CAST({rel_filter_other_col} AS TEXT) FROM {rel_filter_table} WHERE {rel_filter_other_col} IS NOT NULL))")
+                where_clauses.append(f"(\"{rel_filter_col}\" IS NULL OR {clean_col} NOT IN (SELECT {clean_other} FROM \"{rel_filter_table}\" WHERE \"{rel_filter_other_col}\" IS NOT NULL))")
                 
         where_clause = ""
         if where_clauses:
@@ -1417,11 +1457,13 @@ def analyze_relations():
         # Extract unique non-empty values per column
         vals_a = {}
         for col in cols_a:
-            vals_a[col] = set(str(r[col]) for r in rows_a if r.get(col) is not None and str(r[col]).strip() != '')
+            vals_a[col] = set(normalize_val(r[col]) for r in rows_a if r.get(col) is not None)
+            vals_a[col].discard("")
             
         vals_b = {}
         for col in cols_b:
-            vals_b[col] = set(str(r[col]) for r in rows_b if r.get(col) is not None and str(r[col]).strip() != '')
+            vals_b[col] = set(normalize_val(r[col]) for r in rows_b if r.get(col) is not None)
+            vals_b[col].discard("")
             
         # Compare every column from Table A with Table B
         for col_a in cols_a:
