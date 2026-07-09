@@ -262,7 +262,19 @@ def delete_table(table_name):
     try:
         table_name = sanitize_name(table_name)
         conn = get_db_connection()
-        conn.execute(f"DROP TABLE {table_name};")
+        cursor = conn.cursor()
+        
+        # Drop the table
+        cursor.execute(f"DROP TABLE {table_name};")
+        
+        # Clean up logical relations referencing this table
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='_sys_logical_relations';")
+        if cursor.fetchone():
+            cursor.execute("""
+                DELETE FROM _sys_logical_relations 
+                WHERE parent_table = ? OR child_table = ?;
+            """, (table_name, table_name))
+            
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': f"Table '{table_name}' deleted successfully."})
@@ -1390,18 +1402,28 @@ def delete_relation_route():
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='_sys_logical_relations';")
         has_logical_table = cursor.fetchone() is not None
+        
+        is_logical = data.get('is_logical', False)
         deleted_logical = False
+        
         if has_logical_table:
+            # Check if this virtual relationship exists
             cursor.execute("""
-                DELETE FROM _sys_logical_relations 
+                SELECT 1 FROM _sys_logical_relations 
                 WHERE parent_table = ? AND parent_column = ? AND child_table = ? AND child_column = ?;
             """, (parent_table, parent_column, child_table, child_column))
-            if cursor.rowcount > 0:
+            exists_in_logical = cursor.fetchone() is not None
+            
+            if exists_in_logical or is_logical:
+                cursor.execute("""
+                    DELETE FROM _sys_logical_relations 
+                    WHERE parent_table = ? AND parent_column = ? AND child_table = ? AND child_column = ?;
+                """, (parent_table, parent_column, child_table, child_column))
+                conn.commit()
                 deleted_logical = True
-            conn.commit()
         conn.close()
         
-        if deleted_logical:
+        if deleted_logical or is_logical:
             return jsonify({'success': True, 'message': 'Sanal ilişki başarıyla kaldırıldı.'})
             
         remove_fk = {

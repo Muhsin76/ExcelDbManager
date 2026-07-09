@@ -2022,7 +2022,7 @@ function renderRelationsList(relations) {
             <td><span class="badge" style="background: ${r.is_logical ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; color: ${r.is_logical ? 'var(--warning)' : 'var(--danger)'};">${deleteText}</span></td>
             <td><span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);">${updateText}</span></td>
             <td>
-                <button class="btn btn-danger btn-sm" onclick="deleteRelation('${r.child_table}', '${r.child_column}', '${r.parent_table}', '${r.parent_column}')">
+                <button class="btn btn-danger btn-sm" onclick="deleteRelation('${r.child_table}', '${r.child_column}', '${r.parent_table}', '${r.parent_column}', ${r.is_logical})">
                     <i class="fa-solid fa-link-slash"></i> İlişkiyi Kaldır
                 </button>
             </td>
@@ -2031,7 +2031,7 @@ function renderRelationsList(relations) {
     });
 }
 
-async function deleteRelation(childTable, childColumn, parentTable, parentColumn) {
+async function deleteRelation(childTable, childColumn, parentTable, parentColumn, isLogical = false) {
     if (!confirm(`'${childTable}.${childColumn}' -> '${parentTable}.${parentColumn}' arasındaki ilişkiyi kaldırmak istediğinize emin misiniz?`)) {
         return;
     }
@@ -2045,7 +2045,8 @@ async function deleteRelation(childTable, childColumn, parentTable, parentColumn
                 parent_table: parentTable,
                 parent_column: parentColumn,
                 child_table: childTable,
-                child_column: childColumn
+                child_column: childColumn,
+                is_logical: isLogical
             })
         });
         
