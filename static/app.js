@@ -1685,6 +1685,19 @@ function initRelationsEvents() {
     if (btnSwap) {
         btnSwap.addEventListener('click', swapRelationTables);
     }
+
+    // Relation Type Select
+    const typeSelect = document.getElementById('relation-type-select');
+    if (typeSelect) {
+        typeSelect.addEventListener('change', (e) => {
+            const actionGroups = document.querySelectorAll('.relation-on-actions-group');
+            if (e.target.value === 'logical') {
+                actionGroups.forEach(g => g.classList.add('hidden'));
+            } else {
+                actionGroups.forEach(g => g.classList.remove('hidden'));
+            }
+        });
+    }
 }
 
 function swapRelationTables() {
@@ -1919,6 +1932,12 @@ function updateConnectionInfo() {
             `;
             optionsBox.classList.add('hidden');
             createBtn.classList.add('hidden');
+            
+            const typeSelect = document.getElementById('relation-type-select');
+            if (typeSelect) {
+                typeSelect.value = 'physical';
+                document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.remove('hidden'));
+            }
         }
     } else {
         statusBox.innerHTML = `
@@ -1928,6 +1947,12 @@ function updateConnectionInfo() {
         `;
         optionsBox.classList.add('hidden');
         createBtn.classList.add('hidden');
+        
+        const typeSelect = document.getElementById('relation-type-select');
+        if (typeSelect) {
+            typeSelect.value = 'physical';
+            document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.remove('hidden'));
+        }
     }
 }
 
@@ -1949,6 +1974,8 @@ async function createRelation() {
         return;
     }
     
+    const isLogical = document.getElementById('relation-type-select').value === 'logical';
+    
     showLoader('Tablo ilişkisi oluşturuluyor...');
     try {
         const res = await apiCall('/api/relations', {
@@ -1961,7 +1988,7 @@ async function createRelation() {
                 child_column: cCol,
                 on_update: onUpdate,
                 on_delete: onDelete,
-                is_logical: false
+                is_logical: isLogical
             }),
             silentError: true
         });

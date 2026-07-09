@@ -485,6 +485,13 @@
                                     </div>
                                     <div class="relation-actions-options hidden" id="relation-actions-options">
                                         <div class="form-group mt-2">
+                                            <label for="relation-type-select"><i class="fa-solid fa-gears text-indigo"></i> İlişki Tipi:</label>
+                                            <select id="relation-type-select" class="form-control form-control-sm">
+                                                <option value="physical" selected>Fiziksel SQL İlişkisi (Kesin Bütünlük Zorunlu)</option>
+                                                <option value="logical">Sanal İlişki (Veri Uyuşmazlığı Varsa Da Çalışır - Filtreleme İçin)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group mt-2 relation-on-actions-group">
                                             <label for="relation-on-update">Güncelleme Eylemi (ON UPDATE):</label>
                                             <select id="relation-on-update" class="form-control form-control-sm">
                                                 <option value="CASCADE" selected>Değişikliği Otomatik Yay (CASCADE)</option>
@@ -492,7 +499,7 @@
                                                 <option value="RESTRICT">Güncellemeyi Engelle (RESTRICT)</option>
                                             </select>
                                         </div>
-                                        <div class="form-group mt-2">
+                                        <div class="form-group mt-2 relation-on-actions-group">
                                             <label for="relation-on-delete">Silme Eylemi (ON DELETE):</label>
                                             <select id="relation-on-delete" class="form-control form-control-sm">
                                                 <option value="CASCADE" selected>İlişkili Satırları Otomatik Sil (CASCADE)</option>
