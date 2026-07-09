@@ -1935,8 +1935,8 @@ function updateConnectionInfo() {
             
             const typeSelect = document.getElementById('relation-type-select');
             if (typeSelect) {
-                typeSelect.value = 'physical';
-                document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.remove('hidden'));
+                typeSelect.value = 'logical';
+                document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.add('hidden'));
             }
         }
     } else {
@@ -1950,8 +1950,8 @@ function updateConnectionInfo() {
         
         const typeSelect = document.getElementById('relation-type-select');
         if (typeSelect) {
-            typeSelect.value = 'physical';
-            document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.remove('hidden'));
+            typeSelect.value = 'logical';
+            document.querySelectorAll('.relation-on-actions-group').forEach(g => g.classList.add('hidden'));
         }
     }
 }
