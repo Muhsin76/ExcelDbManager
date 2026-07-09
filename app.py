@@ -1415,6 +1415,42 @@ def create_relation():
             col_modifiers = {parent_column: "PRIMARY KEY" if not any(c['pk'] > 0 for c in parent_cols) else "UNIQUE"}
             rebuild_table_schema(parent_table, col_modifiers=col_modifiers)
             
+        # Clean both parent and child columns to prevent space or .0 formatting mismatches
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            # Clean parent
+            cursor.execute(f"""
+                UPDATE "{parent_table}" 
+                SET "{parent_column}" = TRIM(
+                    CASE 
+                        WHEN CAST("{parent_column}" AS TEXT) LIKE '%.0' THEN SUBSTR(CAST("{parent_column}" AS TEXT), 1, LENGTH(CAST("{parent_column}" AS TEXT)) - 2)
+                        ELSE CAST("{parent_column}" AS TEXT)
+                    END
+                )
+                WHERE "{parent_column}" IS NOT NULL;
+            """)
+            # Clean child
+            cursor.execute(f"""
+                UPDATE "{child_table}" 
+                SET "{child_column}" = TRIM(
+                    CASE 
+                        WHEN CAST("{child_column}" AS TEXT) LIKE '%.0' THEN SUBSTR(CAST("{child_column}" AS TEXT), 1, LENGTH(CAST("{child_column}" AS TEXT)) - 2)
+                        ELSE CAST("{child_column}" AS TEXT)
+                    END
+                )
+                WHERE "{child_column}" IS NOT NULL;
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as clean_err:
+            print(f"Auto-cleaning warning: {clean_err}")
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+                    
         # Step 2: Add FOREIGN KEY constraint to child_table
         new_fks = [{
             'child_column': child_column,
