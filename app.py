@@ -109,10 +109,15 @@ def normalize_val(val):
 def sql_clean_column(col_name):
     return f"""LOWER(TRIM(
         CASE 
-            WHEN "{col_name}" NOT GLOB '*[^0-9.-]*' AND "{col_name}" GLOB '*[0-9]*' THEN
+            WHEN TRIM("{col_name}") NOT GLOB '*[^0-9.-]*' 
+                 AND TRIM("{col_name}") GLOB '*[0-9]*' 
+                 AND NOT TRIM("{col_name}") GLOB '*.*.*' 
+                 AND NOT TRIM("{col_name}") GLOB '*-*-*' 
+                 AND NOT TRIM("{col_name}") GLOB '?*-*' 
+            THEN
                 CASE 
-                    WHEN CAST("{col_name}" AS REAL) = CAST("{col_name}" AS INTEGER) THEN CAST(CAST("{col_name}" AS INTEGER) AS TEXT)
-                    ELSE CAST(CAST("{col_name}" AS REAL) AS TEXT)
+                    WHEN CAST(TRIM("{col_name}") AS REAL) = CAST(TRIM("{col_name}") AS INTEGER) THEN CAST(CAST(TRIM("{col_name}") AS INTEGER) AS TEXT)
+                    ELSE CAST(CAST(TRIM("{col_name}") AS REAL) AS TEXT)
                 END
             ELSE 
                 CAST("{col_name}" AS TEXT)
