@@ -968,11 +968,21 @@ def export_table(table_name):
         # Get column names
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns_info = cursor.fetchall()
-        columns = [col['name'] for col in columns_info]
+        all_columns = [col['name'] for col in columns_info]
         
-        if not columns:
+        if not all_columns:
             conn.close()
             return "Table not found", 404
+            
+        # Parse selected columns
+        selected_cols_param = request.args.get('columns', '').strip()
+        if selected_cols_param:
+            selected_columns = [c.strip() for c in selected_cols_param.split(',') if c.strip() in all_columns]
+        else:
+            selected_columns = []
+            
+        if not selected_columns:
+            selected_columns = all_columns
             
         # Build search condition
         where_clauses = []
@@ -980,13 +990,13 @@ def export_table(table_name):
         
         if search:
             search_conditions = []
-            for col in columns:
+            for col in all_columns:
                 search_conditions.append(f"CAST({col} AS TEXT) LIKE ?")
                 query_params.append(f"%{search}%")
             where_clauses.append("(" + " OR ".join(search_conditions) + ")")
             
         # Sütun bazlı filtreleme (Column-specific filters)
-        for col in columns:
+        for col in all_columns:
             col_filter = request.args.get(f"filter_{col}", "").strip()
             if col_filter:
                 where_clauses.append(f"CAST({col} AS TEXT) LIKE ?")
@@ -1012,13 +1022,14 @@ def export_table(table_name):
             
         # Build sort clause
         sort_clause = ""
-        if sort_by and sort_by in columns:
+        if sort_by and sort_by in all_columns:
             sort_clause = f" ORDER BY {sort_by} {sort_order.upper()}"
         else:
             # Default to ordering by rowid to preserve insertion order
             sort_clause = " ORDER BY rowid ASC"
             
-        cursor.execute(f"SELECT * FROM {table_name}{where_clause}{sort_clause};", query_params)
+        col_select_str = ", ".join(f'"{col}"' for col in selected_columns)
+        cursor.execute(f"SELECT {col_select_str} FROM {table_name}{where_clause}{sort_clause};", query_params)
         rows = [list(row) for row in cursor.fetchall()]
         conn.close()
         
@@ -1029,7 +1040,7 @@ def export_table(table_name):
             # Write to CSV
             with open(export_path, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
-                writer.writerow(columns)
+                writer.writerow(selected_columns)
                 writer.writerows(rows)
                 
             return send_file(
@@ -1046,7 +1057,7 @@ def export_table(table_name):
             ws.title = table_name[:30] # Excel limit sheet title length
             
             # Write header
-            ws.append(columns)
+            ws.append(selected_columns)
             
             # Write rows
             for r in rows:

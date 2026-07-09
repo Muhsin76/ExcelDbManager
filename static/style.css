@@ -2118,4 +2118,39 @@ body {
     }
 }
 
+/* Export Column Selector Styling */
+.export-columns-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    user-select: none;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.export-columns-list label:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent-primary);
+}
+
+.export-columns-list input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.btn-xs {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}
+
 

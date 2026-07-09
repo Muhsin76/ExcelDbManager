@@ -25,6 +25,7 @@ const state = {
         rel_filter: null // Store selected relationship filter
     },
     selectedRowIds: [], // Store selected row IDs for bulk actions
+    exportFormat: null, // Store active export format during column selection
     // Temp data during file upload
     uploadData: {
         file_key: null,
@@ -766,6 +767,30 @@ function initTableViewerEvents() {
     
     // Modal Form submit
     document.getElementById('row-edit-form').addEventListener('submit', handleRowSave);
+
+    // Export Modal buttons
+    const btnCloseExportModal = document.getElementById('btn-close-export-modal');
+    if (btnCloseExportModal) btnCloseExportModal.addEventListener('click', closeExportModal);
+    
+    const btnCancelExport = document.getElementById('btn-cancel-export');
+    if (btnCancelExport) btnCancelExport.addEventListener('click', closeExportModal);
+    
+    const btnConfirmExport = document.getElementById('btn-confirm-export');
+    if (btnConfirmExport) btnConfirmExport.addEventListener('click', confirmExportDownload);
+    
+    const btnExportSelectAll = document.getElementById('btn-export-select-all');
+    if (btnExportSelectAll) {
+        btnExportSelectAll.addEventListener('click', () => {
+            document.querySelectorAll('#export-columns-list input[type="checkbox"]').forEach(cb => cb.checked = true);
+        });
+    }
+    
+    const btnExportSelectNone = document.getElementById('btn-export-select-none');
+    if (btnExportSelectNone) {
+        btnExportSelectNone.addEventListener('click', () => {
+            document.querySelectorAll('#export-columns-list input[type="checkbox"]').forEach(cb => cb.checked = false);
+        });
+    }
 }
 
 // Delete Table Call
@@ -2136,19 +2161,67 @@ function autoSelectAndMatch(parentCol, childCol) {
     showToast('Önerilen sütunlar seçildi. İlişkiyi Tanımla butonuna basabilirsiniz.');
 }
 
-// Dynamic export function that reads latest input values directly from the DOM
+// Opens column selection modal for exporting
 function exportTable(format) {
     if (!state.activeTable) return;
     
-    // Get the current search input value
+    state.exportFormat = format;
+    
+    const container = document.getElementById('export-columns-list');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const columns = state.tableData.columns;
+    if (columns.length === 0) {
+        showToast('Aktarılacak sütun bulunamadı.', 'error');
+        return;
+    }
+    
+    columns.forEach(col => {
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="export_col" value="${col}" checked>
+            <span>${col}</span>
+        `;
+        container.appendChild(label);
+    });
+    
+    const modal = document.getElementById('export-modal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+function closeExportModal() {
+    const modal = document.getElementById('export-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    state.exportFormat = null;
+}
+
+function confirmExportDownload() {
+    if (!state.activeTable || !state.exportFormat) return;
+    
+    // Collect selected columns
+    const checkedCheckboxes = document.querySelectorAll('#export-columns-list input[name="export_col"]:checked');
+    if (checkedCheckboxes.length === 0) {
+        showToast('Lütfen en az bir sütun seçin.', 'error');
+        return;
+    }
+    
+    const selectedCols = Array.from(checkedCheckboxes).map(cb => cb.value);
+    
+    // Build query parameters
     const searchInput = document.getElementById('table-search-input');
     const searchVal = searchInput ? searchInput.value.trim() : '';
     
     const queryParams = new URLSearchParams({
-        format: format,
+        format: state.exportFormat,
         search: searchVal,
         sort_by: state.filters.sort_by || '',
-        sort_order: state.filters.sort_order || 'asc'
+        sort_order: state.filters.sort_order || 'asc',
+        columns: selectedCols.join(',')
     });
     
     // Gather all current values from column filter inputs directly from the DOM
@@ -2174,7 +2247,10 @@ function exportTable(format) {
         }
     }
     
-    // Navigate to the export URL
+    // Close modal
+    closeExportModal();
+    
+    // Trigger download
     window.location.href = `/api/tables/${state.activeTable}/export?${queryParams.toString()}`;
 }
 
@@ -2186,3 +2262,5 @@ window.selectRelationTable = selectRelationTable;
 window.createRelation = createRelation;
 window.autoSelectAndMatch = autoSelectAndMatch;
 window.exportTable = exportTable;
+window.closeExportModal = closeExportModal;
+window.confirmExportDownload = confirmExportDownload;
