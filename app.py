@@ -1611,5 +1611,5 @@ def analyze_relations():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("Excel and Database Localhost App starting...")
+    print("DataBase Manager starting...")
     app.run(host='0.0.0.0', debug=True, port=5000)
