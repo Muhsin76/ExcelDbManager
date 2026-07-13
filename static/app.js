@@ -3,6 +3,19 @@ const state = {
     activeTab: 'dashboard',
     tables: [],
     activeTable: null,
+    inventoryState: {
+        activeTable: null,
+        columns: [],
+        rows: [],
+        mappedCols: {
+            material: '',
+            qty: 'row_count',
+            mac: '',
+            serial: ''
+        },
+        selectedMaterial: null,
+        chartInstance: null
+    },
     tableData: {
         columns: [],
         column_types: {},
@@ -112,7 +125,7 @@ function initNavigation() {
     // Handle initial hash routing
     if (window.location.hash) {
         const hash = window.location.hash.substring(1);
-        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations'];
+        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory'];
         if (validTabs.includes(hash)) {
             switchTab(hash);
         }
@@ -163,6 +176,10 @@ function switchTab(tabId) {
         pageTitle.textContent = 'Tablo İlişkileri Tasarımcısı';
         pageSubtitle.textContent = 'Tabloları yan yana getirip aralarında otomatik silme ve güncelleme ilişkileri kurun';
         loadRelationsData();
+    } else if (tabId === 'inventory') {
+        pageTitle.textContent = 'Envanter ve Cihaz Analiz Paneli';
+        pageSubtitle.textContent = 'Sarf malzemelerinizi ve cihaz durumlarınızı grafiksel olarak inceleyin';
+        loadInventoryTab();
     }
 }
 
@@ -2276,3 +2293,582 @@ window.exportTable = exportTable;
 window.closeExportModal = closeExportModal;
 window.confirmExportDownload = confirmExportDownload;
 window.swapRelationTables = swapRelationTables;
+
+// ==========================================================================
+// INVENTORY ANALYTICS DASHBOARD IMPLEMENTATION
+// ==========================================================================
+async function loadInventoryTab() {
+    const select = document.getElementById('inv-select-table');
+    if (!select) return;
+    
+    // Clear list
+    select.innerHTML = '<option value="" disabled selected>Tablo Seçin...</option>';
+    
+    // Fetch tables
+    try {
+        const data = await apiCall('/api/tables');
+        state.tables = data.tables || [];
+        
+        state.tables.forEach(tableObj => {
+            const tableName = tableObj.name;
+            const opt = document.createElement('option');
+            opt.value = tableName;
+            opt.textContent = tableName;
+            select.appendChild(opt);
+        });
+        
+        // Auto-select first table matching inventory or devices keyword
+        let autoSelectTable = "";
+        const keywords = ['sarf', 'envanter', 'inventory', 'device', 'cihaz', 'equipment', 'malzeme'];
+        for (const tObj of state.tables) {
+            const t = tObj.name;
+            if (keywords.some(k => t.toLowerCase().includes(k))) {
+                autoSelectTable = t;
+                break;
+            }
+        }
+        
+        if (autoSelectTable) {
+            select.value = autoSelectTable;
+            loadInventoryTableData(autoSelectTable);
+        }
+    } catch (err) {
+        console.error('Error loading tables for inventory:', err);
+    }
+    
+    // Bind listeners once
+    if (!select.dataset.listenerBound) {
+        select.dataset.listenerBound = 'true';
+        
+        select.addEventListener('change', (e) => {
+            loadInventoryTableData(e.target.value);
+        });
+        
+        // Mapping dropdowns change events
+        ['inv-col-material', 'inv-col-qty', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const key = id.replace('inv-col-', '');
+                    state.inventoryState.mappedCols[key] = e.target.value;
+                    // Reset selection when mappings change to avoid index mismatch
+                    state.inventoryState.selectedMaterial = null;
+                    document.getElementById('btn-inv-clear-filter').style.display = 'none';
+                    calculateAndRenderInventory();
+                });
+            }
+        });
+        
+        // Clear filter button click
+        const btnClear = document.getElementById('btn-inv-clear-filter');
+        if (btnClear) {
+            btnClear.addEventListener('click', () => {
+                state.inventoryState.selectedMaterial = null;
+                btnClear.style.display = 'none';
+                
+                // Remove active class from all rows in distribution table
+                document.querySelectorAll('#inv-materials-tbody tr').forEach(r => r.classList.remove('active-row-highlight'));
+                
+                renderInventoryDevicesTable();
+            });
+        }
+        
+        // Modal close buttons
+        const btnCloseModal1 = document.getElementById('btn-close-dev-modal');
+        if (btnCloseModal1) {
+            btnCloseModal1.addEventListener('click', closeDeviceDetailModal);
+        }
+        const btnCloseModal2 = document.getElementById('btn-close-dev-modal-btn');
+        if (btnCloseModal2) {
+            btnCloseModal2.addEventListener('click', closeDeviceDetailModal);
+        }
+    }
+}
+
+async function loadInventoryTableData(tableName) {
+    if (!tableName) return;
+    showLoader('Tablo analiz ediliyor...');
+    state.inventoryState.activeTable = tableName;
+    state.inventoryState.selectedMaterial = null;
+    
+    // Hide clear filter button
+    const btnClear = document.getElementById('btn-inv-clear-filter');
+    if (btnClear) btnClear.style.display = 'none';
+    
+    try {
+        const data = await apiCall(`/api/tables/${tableName}/all`);
+        state.inventoryState.columns = data.columns || [];
+        state.inventoryState.rows = data.rows || [];
+        
+        // Populate mappings dropdowns
+        populateInventoryMappingSelects(data.columns);
+        
+        // Guess column mappings
+        guessInventoryColumns(data.columns);
+        
+        // Render dashboard
+        document.getElementById('inv-empty-state').classList.add('hidden');
+        document.getElementById('inventory-dashboard').classList.remove('hidden');
+        
+        calculateAndRenderInventory();
+    } catch (err) {
+        console.error('Error loading inventory table data:', err);
+        showToast('Analiz verileri yüklenirken bir hata oluştu.', 'error');
+    } finally {
+        hideLoader();
+    }
+}
+
+function populateInventoryMappingSelects(columns) {
+    const materialSelect = document.getElementById('inv-col-material');
+    const qtySelect = document.getElementById('inv-col-qty');
+    const macSelect = document.getElementById('inv-col-mac');
+    const serialSelect = document.getElementById('inv-col-serial');
+    
+    materialSelect.innerHTML = '<option value="" disabled selected>Seçiniz...</option>';
+    qtySelect.innerHTML = '<option value="row_count">Her satır 1 adet (Satır Sayısı)</option>';
+    macSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
+    serialSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
+    
+    columns.forEach(col => {
+        // Material Name Options
+        const optMat = document.createElement('option');
+        optMat.value = col;
+        optMat.textContent = col;
+        materialSelect.appendChild(optMat);
+        
+        // Qty Options
+        const optQty = document.createElement('option');
+        optQty.value = col;
+        optQty.textContent = col;
+        qtySelect.appendChild(optQty);
+        
+        // MAC Options
+        const optMac = document.createElement('option');
+        optMac.value = col;
+        optMac.textContent = col;
+        macSelect.appendChild(optMac);
+        
+        // Serial Options
+        const optSer = document.createElement('option');
+        optSer.value = col;
+        optSer.textContent = col;
+        serialSelect.appendChild(optSer);
+    });
+}
+
+function guessInventoryColumns(columns) {
+    const matSelect = document.getElementById('inv-col-material');
+    const qtySelect = document.getElementById('inv-col-qty');
+    const macSelect = document.getElementById('inv-col-mac');
+    const serSelect = document.getElementById('inv-col-serial');
+    
+    let guessedMat = '';
+    let guessedQty = 'row_count';
+    let guessedMac = '';
+    let guessedSer = '';
+    
+    // Guess Material: look for keywords
+    const matKeywords = ['malzeme', 'ürün', 'urun', 'ad', 'name', 'model', 'cihaz_adi', 'cihaz', 'tanim', 'description', 'type', 'tip', 'kategori', 'category'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (matKeywords.some(k => lower === k || lower.includes(k))) {
+            // Prefer exact matches first, or contains
+            guessedMat = col;
+            break;
+        }
+    }
+    // Default to first user column if no guess
+    if (!guessedMat && columns.length > 0) {
+        guessedMat = columns[0];
+    }
+    
+    // Guess Qty
+    const qtyKeywords = ['adet', 'miktar', 'sayi', 'count', 'quantity', 'qty', 'tutar'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (qtyKeywords.some(k => lower === k || lower.includes(k))) {
+            guessedQty = col;
+            break;
+        }
+    }
+    
+    // Guess MAC
+    const macKeywords = ['mac', 'mac_adresi', 'mac_address', 'fiziksel_adres', 'ethernet'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (macKeywords.some(k => lower === k || lower.includes(k))) {
+            guessedMac = col;
+            break;
+        }
+    }
+    
+    // Guess Serial
+    const serKeywords = ['seri', 'serial', 'sn', 'seri_no', 'serial_no', 'barkod', 'barcode', 'sicil'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (serKeywords.some(k => lower === k || lower.includes(k))) {
+            guessedSer = col;
+            break;
+        }
+    }
+    
+    // Update Select values
+    matSelect.value = guessedMat;
+    qtySelect.value = guessedQty;
+    macSelect.value = guessedMac;
+    serSelect.value = guessedSer;
+    
+    // Update State
+    state.inventoryState.mappedCols.material = guessedMat;
+    state.inventoryState.mappedCols.qty = guessedQty;
+    state.inventoryState.mappedCols.mac = guessedMac;
+    state.inventoryState.mappedCols.serial = guessedSer;
+}
+
+function calculateAndRenderInventory() {
+    const rows = state.inventoryState.rows;
+    const mapped = state.inventoryState.mappedCols;
+    
+    if (!mapped.material) return;
+    
+    let totalQty = 0;
+    let macCount = 0;
+    let serialCount = 0;
+    const groups = {};
+    
+    rows.forEach(row => {
+        // Material Name
+        const matVal = String(row[mapped.material] || 'Tanımlanmamış').trim();
+        
+        // Quantity
+        let qty = 1;
+        if (mapped.qty !== 'row_count') {
+            const parsed = parseFloat(row[mapped.qty]);
+            qty = isNaN(parsed) ? 1 : parsed;
+        }
+        
+        totalQty += qty;
+        groups[matVal] = (groups[matVal] || 0) + qty;
+        
+        // MAC status
+        if (mapped.mac && row[mapped.mac] !== null && String(row[mapped.mac]).trim() !== '') {
+            macCount += qty;
+        }
+        
+        // Serial status
+        if (mapped.serial && row[mapped.serial] !== null && String(row[mapped.serial]).trim() !== '') {
+            serialCount += qty;
+        }
+    });
+    
+    const uniqueTypesCount = Object.keys(groups).length;
+    
+    // Calculate percentages
+    const macRatio = totalQty > 0 ? Math.round((macCount / totalQty) * 100) : 0;
+    const serialRatio = totalQty > 0 ? Math.round((serialCount / totalQty) * 100) : 0;
+    
+    // Update stats cards
+    document.getElementById('inv-stat-total').textContent = totalQty.toLocaleString();
+    document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
+    document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
+    document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
+    
+    // Render distribution table
+    const sortedGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+    renderDistributionTable(sortedGroups, totalQty);
+    
+    // Render Chart.js Graph
+    renderInventoryChart(sortedGroups);
+    
+    // Render Details List
+    renderInventoryDevicesTable();
+}
+
+function renderDistributionTable(sortedGroups, totalQty) {
+    const tbody = document.getElementById('inv-materials-tbody');
+    tbody.innerHTML = '';
+    
+    if (sortedGroups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Veri bulunamadı.</td></tr>';
+        return;
+    }
+    
+    sortedGroups.forEach(([name, count], index) => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        
+        const pct = totalQty > 0 ? ((count / totalQty) * 100).toFixed(1) : '0.0';
+        
+        tr.innerHTML = `
+            <td class="text-center font-semibold text-secondary" style="width: 50px;">${index + 1}</td>
+            <td class="font-medium" style="text-align: left;">${name}</td>
+            <td class="font-semibold" style="text-align: right; width: 100px;">${count.toLocaleString()}</td>
+            <td class="text-muted" style="text-align: right; width: 100px;">%${pct}</td>
+        `;
+        
+        // Interactive row filtering
+        tr.addEventListener('click', () => {
+            // Toggle filter
+            if (state.inventoryState.selectedMaterial === name) {
+                state.inventoryState.selectedMaterial = null;
+                tr.classList.remove('active-row-highlight');
+                document.getElementById('btn-inv-clear-filter').style.display = 'none';
+            } else {
+                state.inventoryState.selectedMaterial = name;
+                // Highlight row
+                document.querySelectorAll('#inv-materials-tbody tr').forEach(r => r.classList.remove('active-row-highlight'));
+                tr.classList.add('active-row-highlight');
+                document.getElementById('btn-inv-clear-filter').style.display = 'inline-block';
+            }
+            renderInventoryDevicesTable();
+        });
+        
+        tbody.appendChild(tr);
+    });
+}
+
+function renderInventoryChart(sortedGroups) {
+    const ctx = document.getElementById('inv-chart');
+    if (!ctx) return;
+    
+    // Destroy previous chart
+    if (state.inventoryState.chartInstance) {
+        state.inventoryState.chartInstance.destroy();
+    }
+    
+    if (sortedGroups.length === 0) return;
+    
+    // Prepare chart labels and data (Top 5 + "Diğer" logic to avoid pie chart clutter)
+    const labels = [];
+    const data = [];
+    
+    const limit = 5;
+    let othersSum = 0;
+    
+    sortedGroups.forEach(([name, count], idx) => {
+        if (idx < limit) {
+            labels.push(name);
+            data.push(count);
+        } else {
+            othersSum += count;
+        }
+    });
+    
+    if (othersSum > 0) {
+        labels.push('Diğerleri');
+        data.push(othersSum);
+    }
+    
+    // Premium theme colors (curated palette matching glassmorphism)
+    const backgroundColors = [
+        'rgba(99, 102, 241, 0.75)',  // Indigo/Purple
+        'rgba(16, 185, 129, 0.75)',  // Emerald Green
+        'rgba(245, 158, 11, 0.75)',  // Amber Orange
+        'rgba(239, 68, 68, 0.75)',   // Rose Red
+        'rgba(59, 130, 246, 0.75)',  // Blue
+        'rgba(168, 85, 247, 0.75)'   // Purple/Violet
+    ];
+    
+    const borderColors = [
+        'rgba(99, 102, 241, 1)',
+        'rgba(16, 185, 129, 1)',
+        'rgba(245, 158, 11, 1)',
+        'rgba(239, 68, 68, 1)',
+        'rgba(59, 130, 246, 1)',
+        'rgba(168, 85, 247, 1)'
+    ];
+    
+    state.inventoryState.chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                hoverOffset: 12
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        font: {
+                            family: 'Inter',
+                            size: 11
+                        },
+                        padding: 10,
+                        boxWidth: 12
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const val = context.raw || 0;
+                            const total = context.dataset.data.reduce((acc, curr) => acc + curr, 0);
+                            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return ` ${label}: ${val.toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            },
+            // Handle clicking chart slices to filter
+            onClick: (event, activeElements) => {
+                if (activeElements.length > 0) {
+                    const firstPoints = activeElements[0];
+                    const label = state.inventoryState.chartInstance.data.labels[firstPoints.index];
+                    
+                    if (label === 'Diğerleri') {
+                        state.inventoryState.selectedMaterial = null;
+                        document.getElementById('btn-inv-clear-filter').style.display = 'none';
+                        showToast('Diğerleri kategorisini detaylı filtrelemek için sol listeden seçim yapın.', 'info');
+                    } else {
+                        state.inventoryState.selectedMaterial = label;
+                        document.getElementById('btn-inv-clear-filter').style.display = 'inline-block';
+                        
+                        // Find matching row in list to highlight
+                        document.querySelectorAll('#inv-materials-tbody tr').forEach(r => {
+                            const cells = r.querySelectorAll('td');
+                            if (cells.length > 1 && cells[1].textContent.trim() === label) {
+                                r.classList.add('active-row-highlight');
+                                r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            } else {
+                                r.classList.remove('active-row-highlight');
+                            }
+                        });
+                    }
+                    renderInventoryDevicesTable();
+                }
+            }
+        }
+    });
+}
+
+function renderInventoryDevicesTable() {
+    const tbody = document.getElementById('inv-devices-tbody');
+    const title = document.getElementById('inv-details-title');
+    
+    tbody.innerHTML = '';
+    
+    const rows = state.inventoryState.rows;
+    const mapped = state.inventoryState.mappedCols;
+    const selected = state.inventoryState.selectedMaterial;
+    
+    if (!mapped.material) return;
+    
+    // Filter rows by material
+    const filteredRows = selected 
+        ? rows.filter(r => String(r[mapped.material] || 'Tanımlanmamış').trim() === selected)
+        : rows;
+        
+    // Update Title
+    title.innerHTML = selected 
+        ? `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Listesi: <span style="color: var(--accent-primary)">${selected}</span> (${filteredRows.length} Adet)`
+        : `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Detay Listesi (${filteredRows.length} Adet)`;
+        
+    if (filteredRows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+        return;
+    }
+    
+    filteredRows.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        
+        const matVal = row[mapped.material] || 'Tanımlanmamış';
+        const macVal = mapped.mac && row[mapped.mac] !== null ? String(row[mapped.mac]).trim() : '';
+        const serVal = mapped.serial && row[mapped.serial] !== null ? String(row[mapped.serial]).trim() : '';
+        
+        const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
+        const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
+        
+        tr.innerHTML = `
+            <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
+            <td class="font-medium" style="text-align: left;">${matVal}</td>
+            <td style="text-align: left; width: 200px;">${macCell}</td>
+            <td style="text-align: left; width: 200px;">${serCell}</td>
+            <td style="text-align: center; width: 120px;">
+                <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 3px 6px;">
+                    <i class="fa-solid fa-circle-info"></i> Detay Kartı
+                </button>
+            </td>
+        `;
+        
+        // Modal trigger on Detay button
+        tr.querySelector('.btn-view-dev-details').addEventListener('click', () => {
+            openDeviceDetailModal(row);
+        });
+        
+        tbody.appendChild(tr);
+    });
+}
+
+function openDeviceDetailModal(row) {
+    const modal = document.getElementById('device-detail-modal');
+    const container = document.getElementById('device-details-fields');
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    
+    // Sort keys alphabetically but keep _rowid_ first if present
+    const keys = Object.keys(row).sort((a, b) => {
+        if (a === '_rowid_') return -1;
+        if (b === '_rowid_') return 1;
+        return a.localeCompare(b);
+    });
+    
+    keys.forEach(key => {
+        if (key === '_rowid_') return; // Skip internal rowid in visual fields
+        
+        const card = document.createElement('div');
+        card.style.background = 'rgba(255, 255, 255, 0.02)';
+        card.style.border = '1px solid var(--border-color)';
+        card.style.borderRadius = '8px';
+        card.style.padding = '8px 12px';
+        card.style.textAlign = 'left';
+        
+        const keyLabel = document.createElement('div');
+        keyLabel.style.fontSize = '0.7rem';
+        keyLabel.style.color = 'var(--text-secondary)';
+        keyLabel.style.textTransform = 'uppercase';
+        keyLabel.style.fontWeight = '600';
+        keyLabel.textContent = key.replace(/_/g, ' ');
+        
+        const valLabel = document.createElement('div');
+        valLabel.style.fontSize = '0.85rem';
+        valLabel.style.fontWeight = '500';
+        valLabel.style.marginTop = '4px';
+        valLabel.style.wordBreak = 'break-all';
+        
+        const rawVal = row[key];
+        if (rawVal === null || String(rawVal).trim() === '') {
+            valLabel.innerHTML = '<span class="text-muted" style="font-size: 0.8rem; font-style: italic;">Tanımsız</span>';
+        } else {
+            valLabel.textContent = rawVal;
+        }
+        
+        card.appendChild(keyLabel);
+        card.appendChild(valLabel);
+        container.appendChild(card);
+    });
+    
+    modal.classList.add('active');
+}
+
+function closeDeviceDetailModal() {
+    const modal = document.getElementById('device-detail-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+window.loadInventoryTab = loadInventoryTab;
+window.loadInventoryTableData = loadInventoryTableData;
+window.calculateAndRenderInventory = calculateAndRenderInventory;
+window.openDeviceDetailModal = openDeviceDetailModal;
+window.closeDeviceDetailModal = closeDeviceDetailModal;

@@ -393,6 +393,35 @@ def get_table_data(table_name):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# 4b. Get ALL table data without pagination (for analytics/charting)
+@app.route('/api/tables/<table_name>/all', methods=['GET'])
+def get_all_table_data(table_name):
+    try:
+        table_name = sanitize_name(table_name)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get column information
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns_info = cursor.fetchall()
+        columns = [col['name'] for col in columns_info]
+        column_types = {col['name']: col['type'] for col in columns_info}
+        
+        # Fetch all rows with rowid
+        cursor.execute(f"SELECT rowid as _rowid_, * FROM {table_name} ORDER BY rowid ASC;")
+        rows = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'table': table_name,
+            'columns': columns,
+            'column_types': column_types,
+            'rows': rows
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # 4b. Get all rowids (matching current search and column filters)
 @app.route('/api/tables/<table_name>/rowids', methods=['GET'])
 def get_table_rowids(table_name):
