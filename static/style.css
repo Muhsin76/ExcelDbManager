@@ -2205,5 +2205,29 @@ code {
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
+/* Responsive Grid for Inventory Mapping Selectors */
+.inv-grid-layout {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 20px;
+}
 
+@media (max-width: 1100px) {
+    .inv-grid-layout {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .inv-grid-layout > div:first-child {
+        grid-column: span 2;
+    }
+}
 
+@media (max-width: 600px) {
+    .inv-grid-layout {
+        grid-template-columns: 1fr;
+    }
+    .inv-grid-layout > div:first-child {
+        grid-column: span 1;
+    }
+}

@@ -570,40 +570,44 @@
                         <p class="subtitle">Sarf envanteri veya cihaz tablolarınızı görselleştirin. Grafik dilimlerine tıklayarak cihaz detaylarına ulaşın.</p>
                         
                         <!-- Control selectors for Table, Material, Count, MAC and Serial -->
-                        <div class="relations-selectors-row mt-4" style="flex-wrap: wrap; gap: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 20px;">
-                            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                        <!-- Control selectors for Table, Material, Model, Count, MAC and Serial -->
+                        <div class="inv-grid-layout mt-4">
+                            <div class="form-group" style="grid-column: span 2; margin-bottom: 0;">
                                 <label for="inv-select-table"><i class="fa-solid fa-table text-indigo"></i> Analiz Edilecek Tablo:</label>
                                 <select id="inv-select-table" class="form-control">
                                     <option value="" disabled selected>Tablo Seçin...</option>
                                 </select>
                             </div>
                             
-                            <!-- Mapping toggler / settings -->
-                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label for="inv-col-material"><i class="fa-solid fa-tag text-purple"></i> Malzeme Adı:</label>
                                 <select id="inv-col-material" class="form-control">
                                     <option value="">Seçiniz...</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                            
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label for="inv-col-model"><i class="fa-solid fa-laptop text-blue"></i> Model:</label>
                                 <select id="inv-col-model" class="form-control">
                                     <option value="">(İsteğe Bağlı) Seçiniz...</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                            
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label for="inv-col-qty"><i class="fa-solid fa-hashtag text-warning"></i> Adet:</label>
                                 <select id="inv-col-qty" class="form-control">
                                     <option value="row_count">Her satır 1 adet (Satır Sayısı)</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                            
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label for="inv-col-serial"><i class="fa-solid fa-barcode text-success"></i> Seri No:</label>
                                 <select id="inv-col-serial" class="form-control">
                                     <option value="">(İsteğe Bağlı) Seçiniz...</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                            
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label for="inv-col-mac"><i class="fa-solid fa-network-wired text-indigo"></i> MAC Adresi:</label>
                                 <select id="inv-col-mac" class="form-control">
                                     <option value="">(İsteğe Bağlı) Seçiniz...</option>
@@ -611,14 +615,14 @@
                             </div>
                             
                             <!-- Mapping actions -->
-                            <div class="form-group" style="flex: 1.2; min-width: 280px; margin-bottom: 0;">
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label>&nbsp;</label>
                                 <div style="display: flex; gap: 8px;">
                                     <button id="btn-save-inv-mapping" class="btn btn-success" style="flex: 1; padding: 10px 12px; font-size: 0.85rem;" title="Mevcut sütun eşleştirmelerini veritabanına kaydet">
-                                        <i class="fa-solid fa-floppy-disk"></i> Eşleştirmeyi Kaydet
+                                        <i class="fa-solid fa-floppy-disk"></i> Kaydet
                                     </button>
                                     <button id="btn-delete-inv-mapping" class="btn btn-danger hidden" style="flex: 1; padding: 10px 12px; font-size: 0.85rem;" title="Kaydedilmiş sütun eşleştirmesini sil">
-                                        <i class="fa-solid fa-trash-can"></i> Eşleştirmeyi Sil
+                                        <i class="fa-solid fa-trash-can"></i> Sil
                                     </button>
                                 </div>
                             </div>
