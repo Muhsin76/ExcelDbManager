@@ -2880,7 +2880,8 @@ function renderInventoryChart(sortedGroups) {
 
     sortedGroups.forEach(([name, count], idx) => {
         const pct = totalQty > 0 ? (count / totalQty) * 100 : 0;
-        if (idx < 5 || pct >= 1.0) {
+        // Show if it represents >= 5% of the total, or always show the single largest item to prevent empty chart
+        if (idx === 0 || pct >= 5.0) {
             labels.push(name);
             data.push(count);
         } else {
