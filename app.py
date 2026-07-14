@@ -44,6 +44,15 @@ def init_db():
             UNIQUE(parent_table, parent_column, child_table, child_column)
         );
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS _sys_inventory_mappings (
+            table_name TEXT PRIMARY KEY,
+            material_col TEXT,
+            qty_col TEXT,
+            mac_col TEXT,
+            serial_col TEXT
+        );
+    """)
     conn.commit()
     conn.close()
 
@@ -1636,6 +1645,86 @@ def analyze_relations():
         
         return jsonify({'success': True, 'suggestions': suggestions})
         
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 15. Get inventory mapping for a table
+@app.route('/api/inventory/mapping/<table_name>', methods=['GET'])
+def get_inventory_mapping(table_name):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='_sys_inventory_mappings';")
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'success': True, 'mapping': None})
+            
+        cursor.execute("""
+            SELECT material_col, qty_col, mac_col, serial_col 
+            FROM _sys_inventory_mappings 
+            WHERE table_name = ?;
+        """, (table_name,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return jsonify({
+                'success': True,
+                'mapping': {
+                    'material': row['material_col'],
+                    'qty': row['qty_col'],
+                    'mac': row['mac_col'],
+                    'serial': row['serial_col']
+                }
+            })
+        return jsonify({'success': True, 'mapping': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 16. Save or update inventory mapping
+@app.route('/api/inventory/mapping', methods=['POST'])
+def save_inventory_mapping():
+    try:
+        data = request.json
+        table_name = sanitize_name(data.get('table_name'))
+        material_col = data.get('material')
+        qty_col = data.get('qty')
+        mac_col = data.get('mac')
+        serial_col = data.get('serial')
+        
+        if not table_name:
+            return jsonify({'success': False, 'error': 'Tablo adı gereklidir.'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO _sys_inventory_mappings (table_name, material_col, qty_col, mac_col, serial_col)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(table_name) DO UPDATE SET
+                material_col = excluded.material_col,
+                qty_col = excluded.qty_col,
+                mac_col = excluded.mac_col,
+                serial_col = excluded.serial_col;
+        """, (table_name, material_col, qty_col, mac_col, serial_col))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Eşleştirme başarıyla kaydedildi.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 17. Delete inventory mapping for a table
+@app.route('/api/inventory/mapping/<table_name>', methods=['DELETE'])
+def delete_inventory_mapping(table_name):
+    try:
+        if not table_name:
+            return jsonify({'success': False, 'error': 'Tablo adı gereklidir.'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM _sys_inventory_mappings WHERE table_name = ?;", (table_name,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Eşleştirme başarıyla silindi.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
