@@ -14,7 +14,13 @@ const state = {
             serial: ''
         },
         selectedMaterial: null,
-        chartInstance: null
+        chartInstance: null,
+        filters: {
+            search: '',
+            sort: 'qty_desc',
+            qtyCond: 'all',
+            qtyVal: null
+        }
     },
     tableData: {
         columns: [],
@@ -62,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initImportEvents();
     initTableCreatorEvents();
     initRelationsEvents();
-    
+
     // Load initial data
     loadDashboardData();
     loadTablesList();
@@ -83,7 +89,7 @@ function initClock() {
 function initTheme() {
     const themeBtn = document.getElementById('theme-toggle');
     const body = document.body;
-    
+
     // Retrieve saved theme or default to dark
     const savedTheme = localStorage.getItem('theme') || 'dark';
     if (savedTheme === 'light') {
@@ -95,7 +101,7 @@ function initTheme() {
         body.classList.remove('light-theme');
         themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i><span>Karanlık Mod</span>';
     }
-    
+
     themeBtn.addEventListener('click', () => {
         if (body.classList.contains('dark-theme')) {
             body.classList.replace('dark-theme', 'light-theme');
@@ -135,7 +141,7 @@ function initNavigation() {
 function switchTab(tabId) {
     state.activeTab = tabId;
     window.location.hash = tabId;
-    
+
     // Update active nav item
     document.querySelectorAll('.nav-item').forEach(item => {
         if (item.getAttribute('data-tab') === tabId) {
@@ -144,7 +150,7 @@ function switchTab(tabId) {
             item.classList.remove('active');
         }
     });
-    
+
     // Update active view panel
     document.querySelectorAll('.tab-view').forEach(view => {
         if (view.id === `view-${tabId}`) {
@@ -153,11 +159,11 @@ function switchTab(tabId) {
             view.classList.remove('active');
         }
     });
-    
+
     // Header page titles updating dynamically
     const pageTitle = document.getElementById('page-title');
     const pageSubtitle = document.getElementById('page-subtitle');
-    
+
     if (tabId === 'dashboard') {
         pageTitle.textContent = 'Yönetim Paneli';
         pageSubtitle.textContent = 'Veritabanı istatistikleri ve genel durum';
@@ -190,15 +196,15 @@ function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    
+
     const icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation';
     toast.innerHTML = `
         <i class="fa-solid ${icon}"></i>
         <span>${message}</span>
     `;
-    
+
     container.appendChild(toast);
-    
+
     // Fade out and remove after 4 seconds
     setTimeout(() => {
         toast.style.opacity = '0';
@@ -253,23 +259,23 @@ async function loadDashboardData() {
     try {
         const data = await apiCall('/api/tables');
         const tables = data.tables;
-        
+
         // Update stats counters
         document.getElementById('stat-tables-count').textContent = tables.length;
-        
+
         let totalRows = 0;
         tables.forEach(t => totalRows += t.rowCount);
         document.getElementById('stat-rows-count').textContent = totalRows;
-        
+
         // Update son eklenen tablolar list
         const tbody = document.querySelector('#recent-tables-list tbody');
         tbody.innerHTML = '';
-        
+
         if (tables.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Henüz tablo bulunmamaktadır.</td></tr>`;
             return;
         }
-        
+
         // Show up to 5 tables sorted by some criteria or list order
         const recent = tables.slice(-5).reverse();
         recent.forEach(t => {
@@ -306,15 +312,15 @@ async function loadTablesList(selectTableName = null) {
     try {
         const data = await apiCall('/api/tables');
         state.tables = data.tables;
-        
+
         const listContainer = document.getElementById('tables-list-items');
         listContainer.innerHTML = '';
-        
+
         if (state.tables.length === 0) {
             listContainer.innerHTML = `<li class="text-muted text-center p-3">Tablo bulunamadı.</li>`;
             return;
         }
-        
+
         state.tables.forEach(t => {
             const li = document.createElement('li');
             li.className = `table-list-item ${state.activeTable === t.name ? 'active' : ''}`;
@@ -323,13 +329,13 @@ async function loadTablesList(selectTableName = null) {
                 <span class="table-name-txt"><i class="fa-solid fa-table mr-2"></i> ${t.name}</span>
                 <span class="table-list-item-meta">${t.rowCount}</span>
             `;
-            
+
             li.addEventListener('click', () => {
                 selectTable(t.name);
             });
             listContainer.appendChild(li);
         });
-        
+
         // Auto-select table if requested, or if activeTable is still set, or do not select
         if (selectTableName) {
             selectTable(selectTableName);
@@ -343,7 +349,7 @@ async function loadTablesList(selectTableName = null) {
 
 function selectTable(tableName) {
     state.activeTable = tableName;
-    
+
     // Reset filters
     state.filters.page = 1;
     state.filters.search = '';
@@ -352,9 +358,9 @@ function selectTable(tableName) {
     state.filters.col_filters = {}; // Reset column filters
     state.filters.rel_filter = null; // Reset relation filter
     state.selectedRowIds = []; // Clear selected rows
-    
+
     document.getElementById('table-search-input').value = '';
-    
+
     // Reset and hide relation filter dropdown
     const relFilterSelect = document.getElementById('relation-filter-select');
     if (relFilterSelect) {
@@ -364,7 +370,7 @@ function selectTable(tableName) {
     if (relFilterWrapper) {
         relFilterWrapper.classList.add('hidden');
     }
-    
+
     // Highlight list item
     document.querySelectorAll('.table-list-item').forEach(item => {
         if (item.getAttribute('data-name') === tableName) {
@@ -373,13 +379,13 @@ function selectTable(tableName) {
             item.classList.remove('active');
         }
     });
-    
+
     // Show Table content container
     document.getElementById('table-viewer-empty').classList.add('hidden');
     document.getElementById('table-viewer-content').classList.remove('hidden');
-    
+
     document.getElementById('active-table-title').textContent = tableName;
-    
+
     // Fetch and render data
     fetchTableData();
     // Populate relation filters dropdown
@@ -388,7 +394,7 @@ function selectTable(tableName) {
 
 async function fetchTableData() {
     if (!state.activeTable) return;
-    
+
     showLoader('Veriler yükleniyor...');
     try {
         const queryParams = new URLSearchParams({
@@ -398,7 +404,7 @@ async function fetchTableData() {
             sort_by: state.filters.sort_by,
             sort_order: state.filters.sort_order
         });
-        
+
         // Append column-specific filters
         if (state.filters.col_filters) {
             for (const [col, val] of Object.entries(state.filters.col_filters)) {
@@ -407,7 +413,7 @@ async function fetchTableData() {
                 }
             }
         }
-        
+
         // Append relation filter
         if (state.filters.rel_filter) {
             queryParams.append('rel_filter_type', state.filters.rel_filter.type);
@@ -415,17 +421,17 @@ async function fetchTableData() {
             queryParams.append('rel_filter_col', state.filters.rel_filter.col);
             queryParams.append('rel_filter_other_col', state.filters.rel_filter.other_col);
         }
-        
+
         const data = await apiCall(`/api/tables/${state.activeTable}?${queryParams}`);
-        
+
         state.tableData.columns = data.columns;
         state.tableData.column_types = data.column_types;
         state.tableData.rows = data.rows;
         state.tableData.pagination = data.pagination;
-        
+
         // Update badge row count
         document.getElementById('active-table-badge').textContent = `${data.pagination.total_rows} Satır`;
-        
+
         renderDataGrid();
         renderPagination();
     } catch (err) {
@@ -440,18 +446,18 @@ function renderDataGrid() {
     const table = document.getElementById('data-grid');
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
-    
+
     thead.innerHTML = '';
     tbody.innerHTML = '';
-    
+
     const cols = state.tableData.columns;
     const rows = state.tableData.rows;
-    
+
     if (cols.length === 0) return;
-    
+
     // 1. Create Header row
     const headerTr = document.createElement('tr');
-    
+
     // Checkbox Header Column
     const checkboxTh = document.createElement('th');
     checkboxTh.style.width = '40px';
@@ -498,27 +504,27 @@ function renderDataGrid() {
     });
     checkboxTh.appendChild(selectAllCheckbox);
     headerTr.appendChild(checkboxTh);
-    
+
     // Column filter row
     const filterTr = document.createElement('tr');
     filterTr.className = 'filter-row';
     const emptyFilterTh = document.createElement('th');
     filterTr.appendChild(emptyFilterTh);
-    
+
     cols.forEach(col => {
         const th = document.createElement('th');
         th.setAttribute('data-col', col);
-        
+
         // Render sorting indicator
         let sortIcon = '<i class="fa-solid fa-sort th-sort-icon"></i>';
         if (state.filters.sort_by === col) {
-            sortIcon = state.filters.sort_order === 'asc' 
-                ? '<i class="fa-solid fa-sort-up th-sort-icon" style="color: var(--accent-primary)"></i>' 
+            sortIcon = state.filters.sort_order === 'asc'
+                ? '<i class="fa-solid fa-sort-up th-sort-icon" style="color: var(--accent-primary)"></i>'
                 : '<i class="fa-solid fa-sort-down th-sort-icon" style="color: var(--accent-primary)"></i>';
         }
-        
+
         th.innerHTML = `${col} ${sortIcon}`;
-        
+
         th.addEventListener('click', () => {
             if (state.filters.sort_by === col) {
                 state.filters.sort_order = state.filters.sort_order === 'asc' ? 'desc' : 'asc';
@@ -528,9 +534,9 @@ function renderDataGrid() {
             }
             fetchTableData();
         });
-        
+
         headerTr.appendChild(th);
-        
+
         // Sütun filtre girdi kutusu
         const filterTh = document.createElement('th');
         const filterInput = document.createElement('input');
@@ -539,7 +545,7 @@ function renderDataGrid() {
         filterInput.placeholder = `${col} ara...`;
         filterInput.value = state.filters.col_filters[col] || '';
         filterInput.setAttribute('data-col', col);
-        
+
         filterInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 state.filters.col_filters[col] = e.target.value;
@@ -547,11 +553,11 @@ function renderDataGrid() {
                 fetchTableData();
             }
         });
-        
+
         filterTh.appendChild(filterInput);
         filterTr.appendChild(filterTh);
     });
-    
+
     // Actions Header column
     const actionsTh = document.createElement('th');
     actionsTh.textContent = 'İşlemler';
@@ -559,11 +565,11 @@ function renderDataGrid() {
     actionsTh.style.width = '100px';
     headerTr.appendChild(actionsTh);
     thead.appendChild(headerTr);
-    
+
     const emptyActionsTh = document.createElement('th');
     filterTr.appendChild(emptyActionsTh);
     thead.appendChild(filterTr);
-    
+
     // 2. Create Data rows
     if (rows.length === 0) {
         const tr = document.createElement('tr');
@@ -572,10 +578,10 @@ function renderDataGrid() {
         updateBulkActionsBar();
         return;
     }
-    
+
     rows.forEach(row => {
         const tr = document.createElement('tr');
-        
+
         // Checkbox cell
         const tdCheckbox = document.createElement('td');
         const checkbox = document.createElement('input');
@@ -591,7 +597,7 @@ function renderDataGrid() {
             } else {
                 if (idx !== -1) state.selectedRowIds.splice(idx, 1);
             }
-            
+
             const allBoxes = document.querySelectorAll('.row-select-checkbox');
             const selectAll = document.getElementById('select-all-rows');
             if (selectAll) {
@@ -601,35 +607,35 @@ function renderDataGrid() {
         });
         tdCheckbox.appendChild(checkbox);
         tr.appendChild(tdCheckbox);
-        
+
         cols.forEach(col => {
             const td = document.createElement('td');
             td.textContent = row[col] !== null ? row[col] : '';
             tr.appendChild(td);
         });
-        
+
         // Actions cell (Edit / Delete)
         const actionsTd = document.createElement('td');
         actionsTd.className = 'actions-cell';
-        
+
         const editBtn = document.createElement('button');
         editBtn.className = 'btn-icon btn-edit-row';
         editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
         editBtn.title = 'Düzenle';
         editBtn.addEventListener('click', () => openRowModal('edit', row));
-        
+
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn-icon btn-delete-row';
         deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
         deleteBtn.title = 'Sil';
         deleteBtn.addEventListener('click', () => deleteRowConfirm(row._rowid_));
-        
+
         actionsTd.appendChild(editBtn);
         actionsTd.appendChild(deleteBtn);
         tr.appendChild(actionsTd);
         tbody.appendChild(tr);
     });
-    
+
     // Update the UI controls based on selection
     updateBulkActionsBar();
 }
@@ -638,18 +644,18 @@ function renderPagination() {
     const pg = state.tableData.pagination;
     const info = document.getElementById('pagination-info');
     const buttonsContainer = document.getElementById('pagination-buttons');
-    
+
     buttonsContainer.innerHTML = '';
-    
+
     if (pg.total_rows === 0) {
         info.textContent = 'Gösterilecek kayıt yok';
         return;
     }
-    
+
     const startIdx = (pg.page - 1) * pg.per_page + 1;
     const endIdx = Math.min(pg.page * pg.per_page, pg.total_rows);
     info.textContent = `Gösterilen: ${startIdx} - ${endIdx} / Toplam: ${pg.total_rows}`;
-    
+
     // Prev Button
     const prevBtn = document.createElement('button');
     prevBtn.className = 'pagination-btn';
@@ -660,16 +666,16 @@ function renderPagination() {
         fetchTableData();
     });
     buttonsContainer.appendChild(prevBtn);
-    
+
     // Page Numbers
     const maxVisiblePages = 5;
     let startPage = Math.max(1, pg.page - 2);
     let endPage = Math.min(pg.total_pages, startPage + maxVisiblePages - 1);
-    
+
     if (endPage - startPage + 1 < maxVisiblePages) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
         const btn = document.createElement('button');
         btn.className = `pagination-btn ${pg.page === i ? 'active' : ''}`;
@@ -680,7 +686,7 @@ function renderPagination() {
         });
         buttonsContainer.appendChild(btn);
     }
-    
+
     // Next Button
     const nextBtn = document.createElement('button');
     nextBtn.className = 'pagination-btn';
@@ -704,7 +710,7 @@ function initTableViewerEvents() {
             fetchTableData();
         }
     });
-    
+
     // 2. Pagination Page Size Select
     const sizeSelect = document.getElementById('page-size-select');
     sizeSelect.addEventListener('change', (e) => {
@@ -712,7 +718,7 @@ function initTableViewerEvents() {
         state.filters.page = 1;
         fetchTableData();
     });
-    
+
     // 2b. Relation Filter Select
     const relFilterSelect = document.getElementById('relation-filter-select');
     if (relFilterSelect) {
@@ -728,31 +734,31 @@ function initTableViewerEvents() {
             fetchTableData();
         });
     }
-    
+
     // 3. Dropdown Trigger
     const dropdown = document.querySelector('.dropdown-trigger');
-    
+
     // 4. Delete Table Action
     document.getElementById('btn-delete-table').addEventListener('click', () => {
         if (!state.activeTable) return;
-        
+
         const verify = confirm(`"${state.activeTable}" tablosunu ve içindeki TÜM verileri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`);
         if (verify) {
             deleteTableExecute(state.activeTable);
         }
     });
-    
+
     // 5. Add Row Action
     document.getElementById('btn-add-row').addEventListener('click', () => {
         openRowModal('add');
     });
-    
+
     // 6. Bulk Actions Bar events
     document.getElementById('btn-bulk-clear').addEventListener('click', () => {
         state.selectedRowIds = [];
         updateRowCheckboxesState();
     });
-    
+
     document.getElementById('btn-bulk-delete').addEventListener('click', () => {
         if (state.selectedRowIds.length === 0) return;
         const count = state.selectedRowIds.length;
@@ -760,48 +766,48 @@ function initTableViewerEvents() {
             executeBulkDelete();
         }
     });
-    
+
     document.getElementById('btn-bulk-update').addEventListener('click', () => {
         if (state.selectedRowIds.length === 0) return;
-        
+
         const col = document.getElementById('bulk-update-col').value;
         const val = document.getElementById('bulk-update-val').value;
-        
+
         if (!col) {
             showToast('Lütfen güncellenecek sütunu seçin.', 'error');
             return;
         }
-        
+
         const count = state.selectedRowIds.length;
         if (confirm(`Seçili ${count} satırın "${col}" sütununu "${val}" olarak güncellemek istediğinize emin misiniz?`)) {
             executeBulkUpdate(col, val);
         }
     });
-    
+
     // Modal buttons
     document.getElementById('btn-close-row-modal').addEventListener('click', closeRowModal);
     document.getElementById('btn-cancel-row').addEventListener('click', closeRowModal);
-    
+
     // Modal Form submit
     document.getElementById('row-edit-form').addEventListener('submit', handleRowSave);
 
     // Export Modal buttons
     const btnCloseExportModal = document.getElementById('btn-close-export-modal');
     if (btnCloseExportModal) btnCloseExportModal.addEventListener('click', closeExportModal);
-    
+
     const btnCancelExport = document.getElementById('btn-cancel-export');
     if (btnCancelExport) btnCancelExport.addEventListener('click', closeExportModal);
-    
+
     const btnConfirmExport = document.getElementById('btn-confirm-export');
     if (btnConfirmExport) btnConfirmExport.addEventListener('click', confirmExportDownload);
-    
+
     const btnExportSelectAll = document.getElementById('btn-export-select-all');
     if (btnExportSelectAll) {
         btnExportSelectAll.addEventListener('click', () => {
             document.querySelectorAll('#export-columns-list input[type="checkbox"]').forEach(cb => cb.checked = true);
         });
     }
-    
+
     const btnExportSelectNone = document.getElementById('btn-export-select-none');
     if (btnExportSelectNone) {
         btnExportSelectNone.addEventListener('click', () => {
@@ -819,11 +825,11 @@ async function deleteTableExecute(tableName) {
         });
         showToast(`"${tableName}" tablosu başarıyla silindi.`);
         state.activeTable = null;
-        
+
         // Hide content panel
         document.getElementById('table-viewer-content').classList.add('hidden');
         document.getElementById('table-viewer-empty').classList.remove('hidden');
-        
+
         loadTablesList();
     } catch (err) {
         console.error('Delete table error:', err);
@@ -835,7 +841,7 @@ async function deleteTableExecute(tableName) {
 // Row Delete confirmation
 async function deleteRowConfirm(rowid) {
     if (!state.activeTable) return;
-    
+
     const verify = confirm("Bu satırı silmek istediğinize emin misiniz?");
     if (verify) {
         showLoader('Satır siliniyor...');
@@ -858,9 +864,9 @@ function openRowModal(mode, rowData = null) {
     const modal = document.getElementById('row-modal');
     const title = document.getElementById('modal-row-title');
     const fieldsContainer = document.getElementById('row-modal-fields');
-    
+
     fieldsContainer.innerHTML = '';
-    
+
     if (mode === 'add') {
         title.textContent = 'Yeni Satır Ekle';
         modal.setAttribute('data-mode', 'add');
@@ -870,20 +876,20 @@ function openRowModal(mode, rowData = null) {
         modal.setAttribute('data-mode', 'edit');
         modal.setAttribute('data-rowid', rowData._rowid_);
     }
-    
+
     const cols = state.tableData.columns;
     const types = state.tableData.column_types;
-    
+
     cols.forEach(col => {
         const formGroup = document.createElement('div');
         formGroup.className = 'form-group';
-        
+
         const label = document.createElement('label');
         label.textContent = `${col} (${types[col] || 'TEXT'})`;
-        
+
         let input;
         const colType = (types[col] || 'TEXT').toUpperCase();
-        
+
         if (colType === 'INTEGER' || colType === 'REAL' || colType === 'NUMERIC' || colType === 'FLOAT' || colType === 'DOUBLE') {
             input = document.createElement('input');
             input.type = 'number';
@@ -925,15 +931,15 @@ function openRowModal(mode, rowData = null) {
                 input.value = rowData[col] !== null ? rowData[col] : '';
             }
         }
-        
+
         input.name = col;
         input.id = `input-field-${col}`;
-        
+
         formGroup.appendChild(label);
         formGroup.appendChild(input);
         fieldsContainer.appendChild(formGroup);
     });
-    
+
     modal.classList.add('active');
 }
 
@@ -947,7 +953,7 @@ async function handleRowSave(e) {
     e.preventDefault();
     const modal = document.getElementById('row-modal');
     const mode = modal.getAttribute('data-mode');
-    
+
     const formData = {};
     const inputs = modal.querySelectorAll('.form-control');
     inputs.forEach(input => {
@@ -959,7 +965,7 @@ async function handleRowSave(e) {
             formData[input.name] = val === '' ? null : val;
         }
     });
-    
+
     showLoader('Veri kaydediliyor...');
     try {
         if (mode === 'add') {
@@ -978,7 +984,7 @@ async function handleRowSave(e) {
             });
             showToast('Kayıt başarıyla güncellendi.');
         }
-        
+
         closeRowModal();
         fetchTableData();
     } catch (err) {
@@ -994,19 +1000,19 @@ async function handleRowSave(e) {
 function initImportEvents() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    
+
     // Drag & drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
-    
+
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('dragover');
     });
-    
+
     dropZone.addEventListener('dragleave', () => {
         dropZone.classList.remove('dragover');
     });
-    
+
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
@@ -1014,27 +1020,27 @@ function initImportEvents() {
             handleFileUpload(e.dataTransfer.files[0]);
         }
     });
-    
+
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             handleFileUpload(e.target.files[0]);
         }
     });
-    
+
     // Back button in config screen
     document.getElementById('btn-import-back').addEventListener('click', () => {
         document.getElementById('import-step-configure').classList.add('hidden');
         document.getElementById('import-step-upload').classList.remove('hidden');
         document.getElementById('file-input').value = ''; // reset file input
     });
-    
+
     // Import Mode Radio change: append/new table options toggle
     const importRadios = document.querySelectorAll('input[name="import-mode"]');
     importRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {
             const targetWrapper = document.getElementById('target-table-wrapper');
             const tableNameGroup = document.getElementById('import-table-name').closest('.form-group');
-            
+
             if (e.target.value === 'append') {
                 targetWrapper.classList.remove('hidden');
                 tableNameGroup.classList.add('hidden');
@@ -1048,12 +1054,12 @@ function initImportEvents() {
             }
         });
     });
-    
+
     // Excel sheet name change
     document.getElementById('import-sheet-name').addEventListener('change', (e) => {
         handleSheetChange(e.target.value);
     });
-    
+
     // Execute Import Button
     document.getElementById('btn-execute-import').addEventListener('click', executeImport);
 }
@@ -1062,14 +1068,14 @@ function initImportEvents() {
 async function handleFileUpload(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     showLoader('Dosya yükleniyor ve çözümleniyor...');
     try {
         const data = await apiCall('/api/parse-file', {
             method: 'POST',
             body: formData
         });
-        
+
         // Cache data
         state.uploadData.file_key = data.file_key;
         state.uploadData.file_ext = data.file_ext;
@@ -1078,15 +1084,15 @@ async function handleFileUpload(file) {
         state.uploadData.current_sheet = data.sheets.length > 0 ? data.sheets[0] : '';
         state.uploadData.columns = data.columns;
         state.uploadData.preview_rows = data.preview_rows;
-        
+
         // Configure UI panels
         document.getElementById('import-table-name').value = data.suggested_table_name;
-        
+
         // Sheet select display
         const sheetWrapper = document.getElementById('sheet-select-wrapper');
         const sheetSelect = document.getElementById('import-sheet-name');
         sheetSelect.innerHTML = '';
-        
+
         if (data.sheets && data.sheets.length > 1) {
             sheetWrapper.classList.remove('hidden');
             data.sheets.forEach(sh => {
@@ -1098,20 +1104,20 @@ async function handleFileUpload(file) {
         } else {
             sheetWrapper.classList.add('hidden');
         }
-        
+
         // Default Import Mode: new
         document.querySelector('input[name="import-mode"][value="new"]').checked = true;
         document.getElementById('target-table-wrapper').classList.add('hidden');
         document.getElementById('import-table-name').closest('.form-group').classList.remove('hidden');
-        
+
         // Render mapping schema and preview
         renderSchemaMapping(false);
         renderImportPreview();
-        
+
         // Switch steps
         document.getElementById('import-step-upload').classList.add('hidden');
         document.getElementById('import-step-configure').classList.remove('hidden');
-        
+
         showToast('Dosya başarıyla çözümlendi.');
     } catch (err) {
         console.error('File upload & parse error:', err);
@@ -1133,16 +1139,16 @@ async function handleSheetChange(sheetName) {
             file_ext: state.uploadData.file_ext,
             sheet_name: sheetName
         });
-        
+
         // Let's implement `/api/preview-sheet` or fallback to sending the metadata on backend
         // We'll request a parse update
         const response = await fetch(`/api/preview-sheet?${queryParams}`);
         const data = await response.json();
-        
+
         if (data.success) {
             state.uploadData.columns = data.columns;
             state.uploadData.preview_rows = data.preview_rows;
-            
+
             const isAppend = document.querySelector('input[name="import-mode"]:checked').value === 'append';
             renderSchemaMapping(isAppend);
             renderImportPreview();
@@ -1160,7 +1166,7 @@ async function handleSheetChange(sheetName) {
 function populateTargetTablesSelector() {
     const select = document.getElementById('import-target-table');
     select.innerHTML = '';
-    
+
     if (state.tables.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
@@ -1168,14 +1174,14 @@ function populateTargetTablesSelector() {
         select.appendChild(opt);
         return;
     }
-    
+
     state.tables.forEach(t => {
         const opt = document.createElement('option');
         opt.value = t.name;
         opt.textContent = `${t.name} (${t.rowCount} satır)`;
         select.appendChild(opt);
     });
-    
+
     // Redraw schema mapping when active target table changes
     select.onchange = () => {
         renderSchemaMapping(true);
@@ -1186,27 +1192,27 @@ function populateTargetTablesSelector() {
 function renderSchemaMapping(isAppend = false) {
     const container = document.getElementById('schema-mapping-container');
     container.innerHTML = '';
-    
+
     const fileCols = state.uploadData.columns;
-    
+
     if (isAppend) {
         // Appending to an existing table
         const targetTableName = document.getElementById('import-target-table').value;
         const targetTable = state.tables.find(t => t.name === targetTableName);
-        
+
         if (!targetTable) {
             container.innerHTML = `<p class="text-muted text-center p-3">Hedef tablo seçiniz.</p>`;
             return;
         }
-        
+
         fileCols.forEach(col => {
             const row = document.createElement('div');
             row.className = 'schema-row';
-            
+
             // Map logic: find a db column that matches the file column name closely (case-insensitive)
             let matchedDbCol = '';
             const dbCols = targetTable.columns;
-            
+
             const exactMatch = dbCols.find(d => d.name.toLowerCase() === col.name.toLowerCase());
             if (exactMatch) {
                 matchedDbCol = exactMatch.name;
@@ -1215,13 +1221,13 @@ function renderSchemaMapping(isAppend = false) {
                 const prefixMatch = dbCols.find(d => d.name.toLowerCase().includes(col.name.toLowerCase()) || col.name.toLowerCase().includes(d.name.toLowerCase()));
                 if (prefixMatch) matchedDbCol = prefixMatch.name;
             }
-            
+
             let selectOptions = `<option value="">-- Dahil Etme (İptal) --</option>`;
             dbCols.forEach(d => {
                 const selected = d.name === matchedDbCol ? 'selected' : '';
                 selectOptions += `<option value="${d.name}" ${selected}>${d.name} (${d.type})</option>`;
             });
-            
+
             row.innerHTML = `
                 <div class="file-col-name" title="${col.name}">${col.name}</div>
                 <i class="fa-solid fa-arrow-right schema-arrow-icon"></i>
@@ -1236,14 +1242,14 @@ function renderSchemaMapping(isAppend = false) {
         fileCols.forEach(col => {
             const row = document.createElement('div');
             row.className = 'schema-row';
-            
+
             const types = ['TEXT', 'INTEGER', 'REAL', 'FLOAT', 'DATE', 'DATETIME', 'BOOLEAN'];
             let selectOptions = '';
             types.forEach(t => {
                 const selected = col.type === t ? 'selected' : '';
                 selectOptions += `<option value="${t}" ${selected}>${t}</option>`;
             });
-            
+
             row.innerHTML = `
                 <input type="text" class="form-control form-control-sm import-col-name-input" value="${col.name}" placeholder="Sütun Adı">
                 <i class="fa-solid fa-gears schema-arrow-icon"></i>
@@ -1261,15 +1267,15 @@ function renderImportPreview() {
     const table = document.getElementById('import-preview-table');
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
-    
+
     thead.innerHTML = '';
     tbody.innerHTML = '';
-    
+
     const fileCols = state.uploadData.columns;
     const previewRows = state.uploadData.preview_rows;
-    
+
     if (fileCols.length === 0) return;
-    
+
     // Header
     const headerTr = document.createElement('tr');
     fileCols.forEach(col => {
@@ -1278,7 +1284,7 @@ function renderImportPreview() {
         headerTr.appendChild(th);
     });
     thead.appendChild(headerTr);
-    
+
     // Rows
     if (previewRows.length === 0) {
         const tr = document.createElement('tr');
@@ -1286,7 +1292,7 @@ function renderImportPreview() {
         tbody.appendChild(tr);
         return;
     }
-    
+
     previewRows.forEach(row => {
         const tr = document.createElement('tr');
         fileCols.forEach(col => {
@@ -1302,14 +1308,14 @@ function renderImportPreview() {
 async function executeImport() {
     const mode = document.querySelector('input[name="import-mode"]:checked').value;
     const sheetName = state.uploadData.current_sheet;
-    
+
     const bodyData = {
         file_key: state.uploadData.file_key,
         file_ext: state.uploadData.file_ext,
         sheet_name: sheetName,
         import_mode: mode
     };
-    
+
     if (mode === 'new') {
         const tableName = document.getElementById('import-table-name').value.trim();
         if (!tableName) {
@@ -1317,16 +1323,16 @@ async function executeImport() {
             return;
         }
         bodyData.table_name = tableName;
-        
+
         // Grab custom types setup
         const colDefinitions = [];
         const rows = document.querySelectorAll('#schema-mapping-container .schema-row');
         let hasError = false;
-        
+
         rows.forEach(r => {
             const nameInput = r.querySelector('.import-col-name-input');
             const typeSelect = r.querySelector('.import-col-type-select');
-            
+
             const colName = nameInput.value.trim();
             if (!colName) {
                 hasError = true;
@@ -1337,14 +1343,14 @@ async function executeImport() {
                 type: typeSelect.value
             });
         });
-        
+
         if (hasError || colDefinitions.length === 0) {
             showToast('Lütfen tüm sütun adlarını geçerli doldurun.', 'error');
             return;
         }
-        
+
         bodyData.columns = colDefinitions;
-        
+
     } else {
         // append mode
         const targetTable = document.getElementById('import-target-table').value;
@@ -1353,7 +1359,7 @@ async function executeImport() {
             return;
         }
         bodyData.table_name = targetTable;
-        
+
         // Grab mapping mappings
         const mapping = {};
         const selectors = document.querySelectorAll('.col-mapping-selector');
@@ -1364,14 +1370,14 @@ async function executeImport() {
                 mapping[fileCol] = dbCol;
             }
         });
-        
+
         if (Object.keys(mapping).length === 0) {
             showToast('En az bir sütunu eşleştirmeniz gerekmektedir.', 'error');
             return;
         }
         bodyData.column_mapping = mapping;
     }
-    
+
     showLoader('Veriler SQLite veritabanına aktarılıyor...');
     try {
         const data = await apiCall('/api/import-file', {
@@ -1379,14 +1385,14 @@ async function executeImport() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bodyData)
         });
-        
+
         showToast(data.message);
-        
+
         // Reset import screen upload step
         document.getElementById('import-step-configure').classList.add('hidden');
         document.getElementById('import-step-upload').classList.remove('hidden');
         document.getElementById('file-input').value = '';
-        
+
         // Reload list and switch view
         state.activeTable = bodyData.table_name;
         await loadTablesList(bodyData.table_name);
@@ -1404,7 +1410,7 @@ async function executeImport() {
 function initTableCreatorEvents() {
     const addColBtn = document.getElementById('btn-add-column-def');
     const colsList = document.getElementById('column-defs-list');
-    
+
     // Add column row button
     addColBtn.addEventListener('click', () => {
         const row = document.createElement('div');
@@ -1428,41 +1434,41 @@ function initTableCreatorEvents() {
                 <i class="fa-solid fa-trash-can"></i>
             </button>
         `;
-        
+
         // Wire delete row action
         row.querySelector('.btn-delete-col').onclick = () => {
             row.remove();
         };
-        
+
         colsList.appendChild(row);
     });
-    
+
     // Wire submission of manual form
     const form = document.getElementById('manual-table-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const tableName = document.getElementById('manual-table-name').value.trim();
         if (!tableName) return;
-        
+
         const columns = [];
         const rows = document.querySelectorAll('#column-defs-list .column-def-row');
-        
+
         rows.forEach(r => {
             const nameInput = r.querySelector('.col-name-input');
             const typeSelect = r.querySelector('.col-type-select');
-            
+
             columns.push({
                 name: nameInput.value.trim(),
                 type: typeSelect.value
             });
         });
-        
+
         if (columns.length === 0) {
             showToast('En az bir sütun eklemelisiniz.', 'error');
             return;
         }
-        
+
         showLoader('Tablo oluşturuluyor...');
         try {
             const data = await apiCall('/api/tables', {
@@ -1473,10 +1479,10 @@ function initTableCreatorEvents() {
                     columns: columns
                 })
             });
-            
+
             showToast(data.message);
             form.reset();
-            
+
             // Reload and switch
             state.activeTable = tableName;
             await loadTablesList(tableName);
@@ -1496,13 +1502,13 @@ function updateRowCheckboxesState() {
         const rowid = parseInt(cb.getAttribute('data-rowid'));
         cb.checked = state.selectedRowIds.includes(rowid);
     });
-    
+
     const selectAll = document.getElementById('select-all-rows');
     if (selectAll) {
         const rows = state.tableData.rows;
         selectAll.checked = rows.length > 0 && rows.every(r => state.selectedRowIds.includes(r._rowid_));
     }
-    
+
     updateBulkActionsBar();
 }
 
@@ -1510,10 +1516,10 @@ function updateBulkActionsBar() {
     const bar = document.getElementById('bulk-actions-bar');
     const countSpan = document.getElementById('bulk-selected-count');
     const updateColSelect = document.getElementById('bulk-update-col');
-    
+
     if (state.selectedRowIds.length > 0) {
         countSpan.textContent = state.selectedRowIds.length;
-        
+
         // Populate update columns dropdown dynamically
         const currentVal = updateColSelect.value;
         updateColSelect.innerHTML = '';
@@ -1526,7 +1532,7 @@ function updateBulkActionsBar() {
         if (currentVal && state.tableData.columns.includes(currentVal)) {
             updateColSelect.value = currentVal;
         }
-        
+
         bar.classList.remove('hidden');
     } else {
         bar.classList.add('hidden');
@@ -1578,28 +1584,28 @@ async function executeBulkUpdate(column, value) {
 async function updateRelationFiltersDropdown() {
     const wrapper = document.getElementById('relation-filter-wrapper');
     const select = document.getElementById('relation-filter-select');
-    
+
     if (!state.activeTable || !wrapper || !select) {
         if (wrapper) wrapper.classList.add('hidden');
         return;
     }
-    
+
     try {
         const data = await apiCall('/api/relations');
         const relations = data.relations;
-        
+
         // Find relations involving active table
         const activeRelations = relations.filter(r => r.child_table === state.activeTable || r.parent_table === state.activeTable);
-        
+
         if (activeRelations.length === 0) {
             wrapper.classList.add('hidden');
             state.filters.rel_filter = null;
             select.innerHTML = '<option value="">Tüm Kayıtlar</option>';
             return;
         }
-        
+
         select.innerHTML = '<option value="">Tüm Kayıtlar</option>';
-        
+
         activeRelations.forEach(r => {
             if (r.child_table === state.activeTable) {
                 // Active table is the child table. E.g. T.child_column -> parent_table.parent_column
@@ -1613,7 +1619,7 @@ async function updateRelationFiltersDropdown() {
                 });
                 optMatch.textContent = `Eşleşen: [${r.child_column} -> ${r.parent_table}.${r.parent_column}]`;
                 select.appendChild(optMatch);
-                
+
                 // Unmatched Option
                 const optUnmatch = document.createElement('option');
                 optUnmatch.value = JSON.stringify({
@@ -1636,7 +1642,7 @@ async function updateRelationFiltersDropdown() {
                 });
                 optMatch.textContent = `Eşleşen: [${r.parent_column} <- ${r.child_table}.${r.child_column}]`;
                 select.appendChild(optMatch);
-                
+
                 // Unmatched Option
                 const optUnmatch = document.createElement('option');
                 optUnmatch.value = JSON.stringify({
@@ -1649,7 +1655,7 @@ async function updateRelationFiltersDropdown() {
                 select.appendChild(optUnmatch);
             }
         });
-        
+
         // Restore value if still valid
         if (state.filters.rel_filter) {
             const currentStr = JSON.stringify(state.filters.rel_filter);
@@ -1663,7 +1669,7 @@ async function updateRelationFiltersDropdown() {
         } else {
             select.value = '';
         }
-        
+
         wrapper.classList.remove('hidden');
     } catch (err) {
         console.error('Update relation filters error:', err);
@@ -1687,11 +1693,11 @@ function initRelationsEvents() {
     document.getElementById('relation-table-a').addEventListener('change', (e) => {
         selectRelationTable('a', e.target.value);
     });
-    
+
     document.getElementById('relation-table-b').addEventListener('change', (e) => {
         selectRelationTable('b', e.target.value);
     });
-    
+
     // Create Relation Button
     document.getElementById('btn-create-relation').addEventListener('click', () => {
         createRelation();
@@ -1720,21 +1726,21 @@ function initRelationsEvents() {
 function swapRelationTables() {
     const selectA = document.getElementById('relation-table-a');
     const selectB = document.getElementById('relation-table-b');
-    
+
     const valA = selectA.value;
     const valB = selectB.value;
-    
+
     if (!valA && !valB) return;
-    
+
     selectA.value = valB;
     selectB.value = valA;
-    
+
     if (valB) {
         selectRelationTable('a', valB);
     } else {
         resetRelationTableSelection('a');
     }
-    
+
     if (valA) {
         selectRelationTable('b', valA);
     } else {
@@ -1748,47 +1754,47 @@ async function loadRelationsData() {
         // 1. Fetch tables list to populate dropdowns
         const tablesRes = await apiCall('/api/tables');
         const tables = tablesRes.tables;
-        
+
         const selectA = document.getElementById('relation-table-a');
         const selectB = document.getElementById('relation-table-b');
-        
+
         // Save current selections
         const prevA = selectA.value;
         const prevB = selectB.value;
-        
+
         // Reset selections
         selectA.innerHTML = '<option value="" disabled selected>Tablo Seçin...</option>';
         selectB.innerHTML = '<option value="" disabled selected>Tablo Seçin...</option>';
-        
+
         tables.forEach(t => {
             const optA = document.createElement('option');
             optA.value = t.name;
             optA.textContent = t.name;
             selectA.appendChild(optA);
-            
+
             const optB = document.createElement('option');
             optB.value = t.name;
             optB.textContent = t.name;
             selectB.appendChild(optB);
         });
-        
+
         // Restore selections if valid
         if (prevA && tables.some(t => t.name === prevA)) {
             selectA.value = prevA;
         } else {
             resetRelationTableSelection('a');
         }
-        
+
         if (prevB && tables.some(t => t.name === prevB)) {
             selectB.value = prevB;
         } else {
             resetRelationTableSelection('b');
         }
-        
+
         // 2. Fetch existing relations
         const relsRes = await apiCall('/api/relations');
         renderRelationsList(relsRes.relations);
-        
+
     } catch (err) {
         console.error('Relations loading error:', err);
     } finally {
@@ -1808,12 +1814,12 @@ function resetRelationTableSelection(role) {
         document.getElementById('relation-table-b-title').textContent = 'İlişkili Tablo Seçilmedi';
         document.getElementById('relation-table-b-cols').innerHTML = '<div class="text-muted text-center p-4">Lütfen bir ilişkili tablo seçin.</div>';
     }
-    
+
     const sugContainer = document.getElementById('relation-suggestions-container');
     if (sugContainer) sugContainer.classList.add('hidden');
     const sugList = document.getElementById('relation-suggestions-list');
     if (sugList) sugList.innerHTML = '';
-    
+
     updateConnectionInfo();
 }
 
@@ -1822,33 +1828,33 @@ async function selectRelationTable(role, tableName) {
     try {
         const queryParams = new URLSearchParams({ page: 1, per_page: 1 });
         const res = await apiCall(`/api/tables/${tableName}?${queryParams}`);
-        
+
         // Cache table columns & types
         relationsState.tablesData[tableName] = {
             columns: res.columns,
             column_types: res.column_types
         };
-        
+
         // Fetch relations to check for FK and PK decorations
         const relsRes = await apiCall('/api/relations');
         const relations = relsRes.relations;
-        
+
         if (role === 'a') {
             relationsState.parentTable = tableName;
             relationsState.parentColumn = null; // reset selection
-            
+
             document.getElementById('relation-table-a-title').innerHTML = `<i class="fa-solid fa-table text-purple"></i> ${tableName}`;
             renderColumnsList('a', tableName, relations);
         } else {
             relationsState.childTable = tableName;
             relationsState.childColumn = null; // reset selection
-            
+
             document.getElementById('relation-table-b-title').innerHTML = `<i class="fa-solid fa-table text-blue"></i> ${tableName}`;
             renderColumnsList('b', tableName, relations);
         }
-        
+
         updateConnectionInfo();
-        
+
         // Trigger auto-analysis if both tables are selected
         if (relationsState.parentTable && relationsState.childTable) {
             analyzeAndSuggestRelations(relationsState.parentTable, relationsState.childTable);
@@ -1863,22 +1869,22 @@ async function selectRelationTable(role, tableName) {
 function renderColumnsList(role, tableName, relations) {
     const listContainer = document.getElementById(role === 'a' ? 'relation-table-a-cols' : 'relation-table-b-cols');
     listContainer.innerHTML = '';
-    
+
     const tableInfo = relationsState.tablesData[tableName];
     if (!tableInfo) return;
-    
+
     tableInfo.columns.forEach(col => {
         const colType = tableInfo.column_types[col] || 'TEXT';
-        
+
         const relAssociated = relations.find(r => r.parent_table === tableName && r.parent_column === col);
         const isParentInRels = !!relAssociated;
         const isLogicalParent = relAssociated && relAssociated.is_logical;
         const isChildInRels = relations.some(r => r.child_table === tableName && r.child_column === col);
-        
+
         const item = document.createElement('div');
         item.className = 'column-item';
         item.setAttribute('data-col', col);
-        
+
         let badgesHtml = '';
         if (isParentInRels) {
             if (isLogicalParent) {
@@ -1890,7 +1896,7 @@ function renderColumnsList(role, tableName, relations) {
         if (isChildInRels) {
             badgesHtml += ' <span class="badge-fk">FK</span>';
         }
-        
+
         item.innerHTML = `
             <span class="column-item-name">
                 <i class="fa-solid fa-columns text-muted text-xs"></i>
@@ -1899,22 +1905,22 @@ function renderColumnsList(role, tableName, relations) {
             </span>
             <span class="column-item-type">${colType}</span>
         `;
-        
+
         item.addEventListener('click', () => {
             const siblingItems = listContainer.querySelectorAll('.column-item');
             siblingItems.forEach(i => i.classList.remove('selected'));
-            
+
             item.classList.add('selected');
-            
+
             if (role === 'a') {
                 relationsState.parentColumn = col;
             } else {
                 relationsState.childColumn = col;
             }
-            
+
             updateConnectionInfo();
         });
-        
+
         listContainer.appendChild(item);
     });
 }
@@ -1923,12 +1929,12 @@ function updateConnectionInfo() {
     const statusBox = document.querySelector('.connect-selection-status');
     const optionsBox = document.getElementById('relation-actions-options');
     const createBtn = document.getElementById('btn-create-relation');
-    
+
     const pTable = relationsState.parentTable;
     const pCol = relationsState.parentColumn;
     const cTable = relationsState.childTable;
     const cCol = relationsState.childColumn;
-    
+
     if (pTable && cTable) {
         if (pCol && cCol) {
             statusBox.innerHTML = `
@@ -1949,7 +1955,7 @@ function updateConnectionInfo() {
             `;
             optionsBox.classList.add('hidden');
             createBtn.classList.add('hidden');
-            
+
             const typeSelect = document.getElementById('relation-type-select');
             if (typeSelect) {
                 typeSelect.value = 'logical';
@@ -1964,7 +1970,7 @@ function updateConnectionInfo() {
         `;
         optionsBox.classList.add('hidden');
         createBtn.classList.add('hidden');
-        
+
         const typeSelect = document.getElementById('relation-type-select');
         if (typeSelect) {
             typeSelect.value = 'logical';
@@ -1980,19 +1986,19 @@ async function createRelation() {
     const cCol = relationsState.childColumn;
     const onUpdate = document.getElementById('relation-on-update').value;
     const onDelete = document.getElementById('relation-on-delete').value;
-    
+
     if (!pTable || !pCol || !cTable || !cCol) {
         showToast('Lütfen tüm seçimleri tamamlayın.', 'error');
         return;
     }
-    
+
     if (pTable === cTable) {
         showToast('Bir tablo kendisiyle bu arayüzden ilişkilendirilemez.', 'error');
         return;
     }
-    
+
     const isLogical = document.getElementById('relation-type-select').value === 'logical';
-    
+
     showLoader('Tablo ilişkisi oluşturuluyor...');
     try {
         const res = await apiCall('/api/relations', {
@@ -2009,13 +2015,13 @@ async function createRelation() {
             }),
             silentError: true
         });
-        
+
         showToast(res.message);
         await loadRelationsData();
-        
+
         if (pTable) selectRelationTable('a', pTable);
         if (cTable) selectRelationTable('b', cTable);
-        
+
     } catch (err) {
         console.error('Relation creation error:', err);
         const errMsg = err.message || 'İlişki kurulurken bir hata oluştu.';
@@ -2028,22 +2034,22 @@ async function createRelation() {
 function renderRelationsList(relations) {
     const tbody = document.querySelector('#relations-list-table tbody');
     tbody.innerHTML = '';
-    
+
     if (relations.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Henüz tanımlı ilişki bulunmamaktadır.</td></tr>';
         return;
     }
-    
+
     const actionTranslation = {
         'CASCADE': 'Otomatik Sil/Güncelle',
         'SET NULL': 'Boş Bırak (SET NULL)',
         'RESTRICT': 'Engelle (RESTRICT)',
         'NO ACTION': 'Eylemsiz'
     };
-    
+
     relations.forEach(r => {
         let deleteText, updateText, directionIcon, parentBadgeClass, childBadgeClass;
-        
+
         if (r.is_logical) {
             deleteText = 'Sanal (Filtreleme)';
             updateText = 'Sanal (Filtreleme)';
@@ -2057,7 +2063,7 @@ function renderRelationsList(relations) {
             parentBadgeClass = 'badge-pk';
             childBadgeClass = 'badge-fk';
         }
-        
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${r.parent_table}</strong></td>
@@ -2081,7 +2087,7 @@ async function deleteRelation(childTable, childColumn, parentTable, parentColumn
     if (!confirm(`'${childTable}.${childColumn}' -> '${parentTable}.${parentColumn}' arasındaki ilişkiyi kaldırmak istediğinize emin misiniz?`)) {
         return;
     }
-    
+
     showLoader('Tablo ilişkisi kaldırılıyor...');
     try {
         const res = await apiCall('/api/relations', {
@@ -2095,13 +2101,13 @@ async function deleteRelation(childTable, childColumn, parentTable, parentColumn
                 is_logical: isLogical
             })
         });
-        
+
         showToast(res.message);
         await loadRelationsData();
-        
+
         if (relationsState.parentTable) selectRelationTable('a', relationsState.parentTable);
         if (relationsState.childTable) selectRelationTable('b', relationsState.childTable);
-        
+
     } catch (err) {
         console.error('Relation deletion error:', err);
     } finally {
@@ -2112,14 +2118,14 @@ async function deleteRelation(childTable, childColumn, parentTable, parentColumn
 async function analyzeAndSuggestRelations(parentTable, childTable) {
     const suggestionsContainer = document.getElementById('relation-suggestions-container');
     const suggestionsList = document.getElementById('relation-suggestions-list');
-    
+
     if (!suggestionsContainer || !suggestionsList) return;
-    
+
     suggestionsContainer.classList.add('hidden');
     suggestionsList.innerHTML = '';
-    
+
     if (!parentTable || !childTable) return;
-    
+
     try {
         const res = await apiCall('/api/relations/analyze', {
             method: 'POST',
@@ -2129,18 +2135,18 @@ async function analyzeAndSuggestRelations(parentTable, childTable) {
                 table_b: childTable
             })
         });
-        
+
         const suggestions = res.suggestions || [];
         if (suggestions.length === 0) {
             suggestionsList.innerHTML = '<p class="text-xs text-muted" style="font-size: 0.75rem;">Eşleşen sütun veya değer bulunamadı.</p>';
             suggestionsContainer.classList.remove('hidden');
             return;
         }
-        
+
         suggestions.forEach(s => {
             const card = document.createElement('div');
             card.className = 'suggestion-card';
-            
+
             card.innerHTML = `
                 <div class="suggestion-info">
                     <div><strong>${s.child_column}</strong> <i class="fa-solid fa-arrow-right text-xs" style="font-size: 0.65rem;"></i> <strong>${s.parent_column}</strong></div>
@@ -2152,7 +2158,7 @@ async function analyzeAndSuggestRelations(parentTable, childTable) {
             `;
             suggestionsList.appendChild(card);
         });
-        
+
         suggestionsContainer.classList.remove('hidden');
     } catch (err) {
         console.error('Relations analysis error:', err);
@@ -2170,7 +2176,7 @@ function autoSelectAndMatch(parentCol, childCol) {
             relationsState.parentColumn = parentCol;
         }
     }
-    
+
     // 2. Find column item for childCol in Table B and select it
     const listB = document.getElementById('relation-table-b-cols');
     if (listB) {
@@ -2181,10 +2187,10 @@ function autoSelectAndMatch(parentCol, childCol) {
             relationsState.childColumn = childCol;
         }
     }
-    
+
     // 3. Update UI connection info
     updateConnectionInfo();
-    
+
     // 4. Show a toast
     showToast('Önerilen sütunlar seçildi. İlişkiyi Tanımla butonuna basabilirsiniz.');
 }
@@ -2192,19 +2198,19 @@ function autoSelectAndMatch(parentCol, childCol) {
 // Opens column selection modal for exporting
 function exportTable(format) {
     if (!state.activeTable) return;
-    
+
     state.exportFormat = format;
-    
+
     const container = document.getElementById('export-columns-list');
     if (!container) return;
     container.innerHTML = '';
-    
+
     const columns = state.tableData.columns;
     if (columns.length === 0) {
         showToast('Aktarılacak sütun bulunamadı.', 'error');
         return;
     }
-    
+
     columns.forEach(col => {
         const label = document.createElement('label');
         label.innerHTML = `
@@ -2213,7 +2219,7 @@ function exportTable(format) {
         `;
         container.appendChild(label);
     });
-    
+
     const modal = document.getElementById('export-modal');
     if (modal) {
         modal.classList.add('active');
@@ -2230,20 +2236,20 @@ function closeExportModal() {
 
 function confirmExportDownload() {
     if (!state.activeTable || !state.exportFormat) return;
-    
+
     // Collect selected columns
     const checkedCheckboxes = document.querySelectorAll('#export-columns-list input[name="export_col"]:checked');
     if (checkedCheckboxes.length === 0) {
         showToast('Lütfen en az bir sütun seçin.', 'error');
         return;
     }
-    
+
     const selectedCols = Array.from(checkedCheckboxes).map(cb => cb.value);
-    
+
     // Build query parameters
     const searchInput = document.getElementById('table-search-input');
     const searchVal = searchInput ? searchInput.value.trim() : '';
-    
+
     const queryParams = new URLSearchParams({
         format: state.exportFormat,
         search: searchVal,
@@ -2251,7 +2257,7 @@ function confirmExportDownload() {
         sort_order: state.filters.sort_order || 'asc',
         columns: selectedCols.join(',')
     });
-    
+
     // Gather all current values from column filter inputs directly from the DOM
     document.querySelectorAll('.column-filter-input').forEach(input => {
         const col = input.getAttribute('data-col');
@@ -2260,7 +2266,7 @@ function confirmExportDownload() {
             queryParams.append(`filter_${col}`, val);
         }
     });
-    
+
     // Append relation filter if active
     const relFilterSelect = document.getElementById('relation-filter-select');
     if (relFilterSelect && relFilterSelect.value) {
@@ -2274,10 +2280,10 @@ function confirmExportDownload() {
             console.error('Error parsing relation filter:', e);
         }
     }
-    
+
     // Close modal
     closeExportModal();
-    
+
     // Trigger download
     window.location.href = `/api/tables/${state.activeTable}/export?${queryParams.toString()}`;
 }
@@ -2300,15 +2306,15 @@ window.swapRelationTables = swapRelationTables;
 async function loadInventoryTab() {
     const select = document.getElementById('inv-select-table');
     if (!select) return;
-    
+
     // Clear list
     select.innerHTML = '<option value="" disabled selected>Tablo Seçin...</option>';
-    
+
     // Fetch tables
     try {
         const data = await apiCall('/api/tables');
         state.tables = data.tables || [];
-        
+
         state.tables.forEach(tableObj => {
             const tableName = tableObj.name;
             const opt = document.createElement('option');
@@ -2316,7 +2322,7 @@ async function loadInventoryTab() {
             opt.textContent = tableName;
             select.appendChild(opt);
         });
-        
+
         // Auto-select first table matching inventory or devices keyword
         let autoSelectTable = "";
         const keywords = ['sarf', 'envanter', 'inventory', 'device', 'cihaz', 'equipment', 'malzeme'];
@@ -2327,7 +2333,7 @@ async function loadInventoryTab() {
                 break;
             }
         }
-        
+
         if (autoSelectTable) {
             select.value = autoSelectTable;
             loadInventoryTableData(autoSelectTable);
@@ -2335,15 +2341,15 @@ async function loadInventoryTab() {
     } catch (err) {
         console.error('Error loading tables for inventory:', err);
     }
-    
+
     // Bind listeners once
     if (!select.dataset.listenerBound) {
         select.dataset.listenerBound = 'true';
-        
+
         select.addEventListener('change', (e) => {
             loadInventoryTableData(e.target.value);
         });
-        
+
         // Mapping dropdowns change events
         ['inv-col-material', 'inv-col-qty', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
             const el = document.getElementById(id);
@@ -2358,21 +2364,21 @@ async function loadInventoryTab() {
                 });
             }
         });
-        
+
         // Clear filter button click
         const btnClear = document.getElementById('btn-inv-clear-filter');
         if (btnClear) {
             btnClear.addEventListener('click', () => {
                 state.inventoryState.selectedMaterial = null;
                 btnClear.style.display = 'none';
-                
+
                 // Remove active class from all rows in distribution table
                 document.querySelectorAll('#inv-materials-tbody tr').forEach(r => r.classList.remove('active-row-highlight'));
-                
+
                 renderInventoryDevicesTable();
             });
         }
-        
+
         // Modal close buttons
         const btnCloseModal1 = document.getElementById('btn-close-dev-modal');
         if (btnCloseModal1) {
@@ -2392,13 +2398,13 @@ async function loadInventoryTab() {
                     showToast('Lütfen önce bir tablo seçin.', 'error');
                     return;
                 }
-                
+
                 const mapped = state.inventoryState.mappedCols;
                 if (!mapped.material) {
                     showToast('Malzeme/Cihaz Adı sütununu seçmelisiniz.', 'error');
                     return;
                 }
-                
+
                 showLoader('Eşleştirme kaydediliyor...');
                 try {
                     const res = await apiCall('/api/inventory/mapping', {
@@ -2414,7 +2420,7 @@ async function loadInventoryTab() {
                             serial: mapped.serial
                         })
                     });
-                    
+
                     if (res && res.success) {
                         showToast(res.message || 'Eşleştirme kaydedildi.');
                         const btnDelMapping = document.getElementById('btn-delete-inv-mapping');
@@ -2430,14 +2436,14 @@ async function loadInventoryTab() {
                 }
             });
         }
-        
+
         // Delete Mapping button click
         const btnDeleteMapping = document.getElementById('btn-delete-inv-mapping');
         if (btnDeleteMapping) {
             btnDeleteMapping.addEventListener('click', async () => {
                 const tableName = state.inventoryState.activeTable;
                 if (!tableName) return;
-                
+
                 showLoader('Eşleştirme siliniyor...');
                 try {
                     const res = await apiCall(`/api/inventory/mapping/${tableName}`, {
@@ -2446,7 +2452,7 @@ async function loadInventoryTab() {
                     if (res && res.success) {
                         showToast(res.message || 'Eşleştirme silindi.');
                         btnDeleteMapping.classList.add('hidden');
-                        
+
                         // Recalculate auto-guess
                         guessInventoryColumns(state.inventoryState.columns);
                         calculateAndRenderInventory();
@@ -2461,6 +2467,47 @@ async function loadInventoryTab() {
                 }
             });
         }
+
+        // Search & Filter listeners
+        const searchInput = document.getElementById('inv-search-material');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                state.inventoryState.filters.search = e.target.value;
+                calculateAndRenderInventory();
+            });
+        }
+
+        const sortSelect = document.getElementById('inv-sort-order');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                state.inventoryState.filters.sort = e.target.value;
+                calculateAndRenderInventory();
+            });
+        }
+
+        const qtyCondSelect = document.getElementById('inv-qty-cond');
+        const qtyValInput = document.getElementById('inv-qty-val');
+        
+        if (qtyCondSelect && qtyValInput) {
+            qtyCondSelect.addEventListener('change', (e) => {
+                const cond = e.target.value;
+                state.inventoryState.filters.qtyCond = cond;
+                if (cond === 'all') {
+                    qtyValInput.disabled = true;
+                    qtyValInput.value = '';
+                    state.inventoryState.filters.qtyVal = null;
+                } else {
+                    qtyValInput.disabled = false;
+                }
+                calculateAndRenderInventory();
+            });
+
+            qtyValInput.addEventListener('input', (e) => {
+                const val = e.target.value ? parseFloat(e.target.value) : null;
+                state.inventoryState.filters.qtyVal = val;
+                calculateAndRenderInventory();
+            });
+        }
     }
 }
 
@@ -2469,19 +2516,42 @@ async function loadInventoryTableData(tableName) {
     showLoader('Tablo analiz ediliyor...');
     state.inventoryState.activeTable = tableName;
     state.inventoryState.selectedMaterial = null;
+
+    // Reset filters
+    state.inventoryState.filters = {
+        search: '',
+        sort: 'qty_desc',
+        qtyCond: 'all',
+        qtyVal: null
+    };
     
+    const searchInput = document.getElementById('inv-search-material');
+    if (searchInput) searchInput.value = '';
+    
+    const sortSelect = document.getElementById('inv-sort-order');
+    if (sortSelect) sortSelect.value = 'qty_desc';
+    
+    const qtyCondSelect = document.getElementById('inv-qty-cond');
+    if (qtyCondSelect) qtyCondSelect.value = 'all';
+    
+    const qtyValInput = document.getElementById('inv-qty-val');
+    if (qtyValInput) {
+        qtyValInput.value = '';
+        qtyValInput.disabled = true;
+    }
+
     // Hide clear filter button
     const btnClear = document.getElementById('btn-inv-clear-filter');
     if (btnClear) btnClear.style.display = 'none';
-    
+
     try {
         const data = await apiCall(`/api/tables/${tableName}/all`);
         state.inventoryState.columns = data.columns || [];
         state.inventoryState.rows = data.rows || [];
-        
+
         // Populate mappings dropdowns
         populateInventoryMappingSelects(data.columns);
-        
+
         // Check if there is a saved mapping
         let hasSavedMapping = false;
         try {
@@ -2489,30 +2559,30 @@ async function loadInventoryTableData(tableName) {
             if (mapRes && mapRes.success && mapRes.mapping) {
                 const mapping = mapRes.mapping;
                 const colExists = (col) => data.columns.includes(col);
-                
+
                 const matVal = colExists(mapping.material) ? mapping.material : '';
                 const qtyVal = (mapping.qty === 'row_count' || colExists(mapping.qty)) ? mapping.qty : 'row_count';
                 const macVal = colExists(mapping.mac) ? mapping.mac : '';
                 const serialVal = colExists(mapping.serial) ? mapping.serial : '';
-                
+
                 // Update dropdown values
                 document.getElementById('inv-col-material').value = matVal;
                 document.getElementById('inv-col-qty').value = qtyVal;
                 document.getElementById('inv-col-mac').value = macVal;
                 document.getElementById('inv-col-serial').value = serialVal;
-                
+
                 // Update State
                 state.inventoryState.mappedCols.material = matVal;
                 state.inventoryState.mappedCols.qty = qtyVal;
                 state.inventoryState.mappedCols.mac = macVal;
                 state.inventoryState.mappedCols.serial = serialVal;
-                
+
                 hasSavedMapping = true;
             }
         } catch (mapErr) {
             console.error('Error fetching inventory mapping:', mapErr);
         }
-        
+
         const btnDelMapping = document.getElementById('btn-delete-inv-mapping');
         if (hasSavedMapping) {
             // Show delete button
@@ -2520,15 +2590,15 @@ async function loadInventoryTableData(tableName) {
         } else {
             // Guess column mappings (default)
             guessInventoryColumns(data.columns);
-            
+
             // Hide delete button
             if (btnDelMapping) btnDelMapping.classList.add('hidden');
         }
-        
+
         // Render dashboard
         document.getElementById('inv-empty-state').classList.add('hidden');
         document.getElementById('inventory-dashboard').classList.remove('hidden');
-        
+
         calculateAndRenderInventory();
     } catch (err) {
         console.error('Error loading inventory table data:', err);
@@ -2543,31 +2613,31 @@ function populateInventoryMappingSelects(columns) {
     const qtySelect = document.getElementById('inv-col-qty');
     const macSelect = document.getElementById('inv-col-mac');
     const serialSelect = document.getElementById('inv-col-serial');
-    
+
     materialSelect.innerHTML = '<option value="" disabled selected>Seçiniz...</option>';
     qtySelect.innerHTML = '<option value="row_count">Her satır 1 adet (Satır Sayısı)</option>';
     macSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
     serialSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
-    
+
     columns.forEach(col => {
         // Material Name Options
         const optMat = document.createElement('option');
         optMat.value = col;
         optMat.textContent = col;
         materialSelect.appendChild(optMat);
-        
+
         // Qty Options
         const optQty = document.createElement('option');
         optQty.value = col;
         optQty.textContent = col;
         qtySelect.appendChild(optQty);
-        
+
         // MAC Options
         const optMac = document.createElement('option');
         optMac.value = col;
         optMac.textContent = col;
         macSelect.appendChild(optMac);
-        
+
         // Serial Options
         const optSer = document.createElement('option');
         optSer.value = col;
@@ -2581,12 +2651,12 @@ function guessInventoryColumns(columns) {
     const qtySelect = document.getElementById('inv-col-qty');
     const macSelect = document.getElementById('inv-col-mac');
     const serSelect = document.getElementById('inv-col-serial');
-    
+
     let guessedMat = '';
     let guessedQty = 'row_count';
     let guessedMac = '';
     let guessedSer = '';
-    
+
     // Guess Material: look for keywords
     const matKeywords = ['malzeme', 'ürün', 'urun', 'ad', 'name', 'model', 'cihaz_adi', 'cihaz', 'tanim', 'description', 'type', 'tip', 'kategori', 'category'];
     for (const col of columns) {
@@ -2601,7 +2671,7 @@ function guessInventoryColumns(columns) {
     if (!guessedMat && columns.length > 0) {
         guessedMat = columns[0];
     }
-    
+
     // Guess Qty
     const qtyKeywords = ['adet', 'miktar', 'sayi', 'count', 'quantity', 'qty', 'tutar'];
     for (const col of columns) {
@@ -2611,7 +2681,7 @@ function guessInventoryColumns(columns) {
             break;
         }
     }
-    
+
     // Guess MAC
     const macKeywords = ['mac', 'mac_adresi', 'mac_address', 'fiziksel_adres', 'ethernet'];
     for (const col of columns) {
@@ -2621,7 +2691,7 @@ function guessInventoryColumns(columns) {
             break;
         }
     }
-    
+
     // Guess Serial
     const serKeywords = ['seri', 'serial', 'sn', 'seri_no', 'serial_no', 'barkod', 'barcode', 'sicil'];
     for (const col of columns) {
@@ -2631,13 +2701,13 @@ function guessInventoryColumns(columns) {
             break;
         }
     }
-    
+
     // Update Select values
     matSelect.value = guessedMat;
     qtySelect.value = guessedQty;
     macSelect.value = guessedMac;
     serSelect.value = guessedSer;
-    
+
     // Update State
     state.inventoryState.mappedCols.material = guessedMat;
     state.inventoryState.mappedCols.qty = guessedQty;
@@ -2648,58 +2718,93 @@ function guessInventoryColumns(columns) {
 function calculateAndRenderInventory() {
     const rows = state.inventoryState.rows;
     const mapped = state.inventoryState.mappedCols;
-    
+
     if (!mapped.material) return;
-    
+
     let totalQty = 0;
     let macCount = 0;
     let serialCount = 0;
     const groups = {};
-    
+
     rows.forEach(row => {
         // Material Name
         const matVal = String(row[mapped.material] || 'Tanımlanmamış').trim();
-        
+
         // Quantity
         let qty = 1;
         if (mapped.qty !== 'row_count') {
             const parsed = parseFloat(row[mapped.qty]);
             qty = isNaN(parsed) ? 1 : parsed;
         }
-        
+
         totalQty += qty;
         groups[matVal] = (groups[matVal] || 0) + qty;
-        
+
         // MAC status
         if (mapped.mac && row[mapped.mac] !== null && String(row[mapped.mac]).trim() !== '') {
             macCount += qty;
         }
-        
+
         // Serial status
         if (mapped.serial && row[mapped.serial] !== null && String(row[mapped.serial]).trim() !== '') {
             serialCount += qty;
         }
     });
-    
+
     const uniqueTypesCount = Object.keys(groups).length;
-    
+
     // Calculate percentages
     const macRatio = totalQty > 0 ? Math.round((macCount / totalQty) * 100) : 0;
     const serialRatio = totalQty > 0 ? Math.round((serialCount / totalQty) * 100) : 0;
-    
+
     // Update stats cards
     document.getElementById('inv-stat-total').textContent = totalQty.toLocaleString();
     document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
     document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
     document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
+
+    // Filter and sort groups based on user filter state
+    let filteredGroups = Object.entries(groups);
     
+    // 1. Search filter
+    const searchVal = (state.inventoryState.filters.search || '').trim().toLowerCase();
+    if (searchVal) {
+        filteredGroups = filteredGroups.filter(([name, count]) => name.toLowerCase().includes(searchVal));
+    }
+    
+    // 2. Quantity filter
+    const qtyCond = state.inventoryState.filters.qtyCond || 'all';
+    const qtyVal = parseFloat(state.inventoryState.filters.qtyVal);
+    if (qtyCond !== 'all' && !isNaN(qtyVal)) {
+        filteredGroups = filteredGroups.filter(([name, count]) => {
+            if (qtyCond === 'lt') return count < qtyVal;
+            if (qtyCond === 'gt') return count > qtyVal;
+            if (qtyCond === 'eq') return count === qtyVal;
+            return true;
+        });
+    }
+    
+    // 3. Sort order
+    const sortOrder = state.inventoryState.filters.sort || 'qty_desc';
+    if (sortOrder === 'qty_desc') {
+        filteredGroups.sort((a, b) => b[1] - a[1]);
+    } else if (sortOrder === 'qty_asc') {
+        filteredGroups.sort((a, b) => a[1] - b[1]);
+    } else if (sortOrder === 'name_asc') {
+        filteredGroups.sort((a, b) => a[0].localeCompare(b[0], 'tr'));
+    } else if (sortOrder === 'name_desc') {
+        filteredGroups.sort((a, b) => b[0].localeCompare(a[0], 'tr'));
+    }
+
+    // Keep filtered groups in state
+    state.inventoryState.filteredGroups = filteredGroups;
+
     // Render distribution table
-    const sortedGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
-    renderDistributionTable(sortedGroups, totalQty);
-    
+    renderDistributionTable(filteredGroups, totalQty);
+
     // Render Chart.js Graph
-    renderInventoryChart(sortedGroups);
-    
+    renderInventoryChart(filteredGroups);
+
     // Render Details List
     renderInventoryDevicesTable();
 }
@@ -2707,25 +2812,25 @@ function calculateAndRenderInventory() {
 function renderDistributionTable(sortedGroups, totalQty) {
     const tbody = document.getElementById('inv-materials-tbody');
     tbody.innerHTML = '';
-    
+
     if (sortedGroups.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Veri bulunamadı.</td></tr>';
         return;
     }
-    
+
     sortedGroups.forEach(([name, count], index) => {
         const tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
-        
+
         const pct = totalQty > 0 ? ((count / totalQty) * 100).toFixed(1) : '0.0';
-        
+
         tr.innerHTML = `
             <td class="text-center font-semibold text-secondary" style="width: 50px;">${index + 1}</td>
             <td class="font-medium" style="text-align: left;">${name}</td>
             <td class="font-semibold" style="text-align: right; width: 100px;">${count.toLocaleString()}</td>
             <td class="text-muted" style="text-align: right; width: 100px;">%${pct}</td>
         `;
-        
+
         // Interactive row filtering
         tr.addEventListener('click', () => {
             // Toggle filter
@@ -2742,7 +2847,7 @@ function renderDistributionTable(sortedGroups, totalQty) {
             }
             renderInventoryDevicesTable();
         });
-        
+
         tbody.appendChild(tr);
     });
 }
@@ -2750,21 +2855,21 @@ function renderDistributionTable(sortedGroups, totalQty) {
 function renderInventoryChart(sortedGroups) {
     const ctx = document.getElementById('inv-chart');
     if (!ctx) return;
-    
+
     // Destroy previous chart
     if (state.inventoryState.chartInstance) {
         state.inventoryState.chartInstance.destroy();
     }
-    
+
     if (sortedGroups.length === 0) return;
-    
+
     // Prepare chart labels and data (Top 5 + "Diğer" logic to avoid pie chart clutter)
     const labels = [];
     const data = [];
-    
+
     const limit = 5;
     let othersSum = 0;
-    
+
     sortedGroups.forEach(([name, count], idx) => {
         if (idx < limit) {
             labels.push(name);
@@ -2773,12 +2878,12 @@ function renderInventoryChart(sortedGroups) {
             othersSum += count;
         }
     });
-    
+
     if (othersSum > 0) {
         labels.push('Diğerleri');
         data.push(othersSum);
     }
-    
+
     // Premium theme colors (curated palette matching glassmorphism)
     const backgroundColors = [
         'rgba(99, 102, 241, 0.75)',  // Indigo/Purple
@@ -2788,7 +2893,7 @@ function renderInventoryChart(sortedGroups) {
         'rgba(59, 130, 246, 0.75)',  // Blue
         'rgba(168, 85, 247, 0.75)'   // Purple/Violet
     ];
-    
+
     const borderColors = [
         'rgba(99, 102, 241, 1)',
         'rgba(16, 185, 129, 1)',
@@ -2797,7 +2902,7 @@ function renderInventoryChart(sortedGroups) {
         'rgba(59, 130, 246, 1)',
         'rgba(168, 85, 247, 1)'
     ];
-    
+
     state.inventoryState.chartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -2829,7 +2934,7 @@ function renderInventoryChart(sortedGroups) {
                 },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             const label = context.label || '';
                             const val = context.raw || 0;
                             const total = context.dataset.data.reduce((acc, curr) => acc + curr, 0);
@@ -2844,7 +2949,7 @@ function renderInventoryChart(sortedGroups) {
                 if (activeElements.length > 0) {
                     const firstPoints = activeElements[0];
                     const label = state.inventoryState.chartInstance.data.labels[firstPoints.index];
-                    
+
                     if (label === 'Diğerleri') {
                         state.inventoryState.selectedMaterial = null;
                         document.getElementById('btn-inv-clear-filter').style.display = 'none';
@@ -2852,7 +2957,7 @@ function renderInventoryChart(sortedGroups) {
                     } else {
                         state.inventoryState.selectedMaterial = label;
                         document.getElementById('btn-inv-clear-filter').style.display = 'inline-block';
-                        
+
                         // Find matching row in list to highlight
                         document.querySelectorAll('#inv-materials-tbody tr').forEach(r => {
                             const cells = r.querySelectorAll('td');
@@ -2874,40 +2979,44 @@ function renderInventoryChart(sortedGroups) {
 function renderInventoryDevicesTable() {
     const tbody = document.getElementById('inv-devices-tbody');
     const title = document.getElementById('inv-details-title');
-    
+
     tbody.innerHTML = '';
-    
+
     const rows = state.inventoryState.rows;
     const mapped = state.inventoryState.mappedCols;
     const selected = state.inventoryState.selectedMaterial;
-    
+
     if (!mapped.material) return;
-    
+
     // Filter rows by material
-    const filteredRows = selected 
-        ? rows.filter(r => String(r[mapped.material] || 'Tanımlanmamış').trim() === selected)
-        : rows;
-        
+    let filteredRows = [];
+    if (selected) {
+        filteredRows = rows.filter(r => String(r[mapped.material] || 'Tanımlanmamış').trim() === selected);
+    } else {
+        const visibleMaterials = new Set((state.inventoryState.filteredGroups || []).map(([name, count]) => name));
+        filteredRows = rows.filter(r => visibleMaterials.has(String(r[mapped.material] || 'Tanımlanmamış').trim()));
+    }
+
     // Update Title
-    title.innerHTML = selected 
+    title.innerHTML = selected
         ? `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Listesi: <span style="color: var(--accent-primary)">${selected}</span> (${filteredRows.length} Adet)`
         : `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Detay Listesi (${filteredRows.length} Adet)`;
-        
+
     if (filteredRows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
         return;
     }
-    
+
     filteredRows.forEach((row, index) => {
         const tr = document.createElement('tr');
-        
+
         const matVal = row[mapped.material] || 'Tanımlanmamış';
         const macVal = mapped.mac && row[mapped.mac] !== null ? String(row[mapped.mac]).trim() : '';
         const serVal = mapped.serial && row[mapped.serial] !== null ? String(row[mapped.serial]).trim() : '';
-        
+
         const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
         const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
-        
+
         tr.innerHTML = `
             <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
             <td class="font-medium" style="text-align: left;">${matVal}</td>
@@ -2919,12 +3028,12 @@ function renderInventoryDevicesTable() {
                 </button>
             </td>
         `;
-        
+
         // Modal trigger on Detay button
         tr.querySelector('.btn-view-dev-details').addEventListener('click', () => {
             openDeviceDetailModal(row);
         });
-        
+
         tbody.appendChild(tr);
     });
 }
@@ -2933,51 +3042,51 @@ function openDeviceDetailModal(row) {
     const modal = document.getElementById('device-detail-modal');
     const container = document.getElementById('device-details-fields');
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    
+
     // Sort keys alphabetically but keep _rowid_ first if present
     const keys = Object.keys(row).sort((a, b) => {
         if (a === '_rowid_') return -1;
         if (b === '_rowid_') return 1;
         return a.localeCompare(b);
     });
-    
+
     keys.forEach(key => {
         if (key === '_rowid_') return; // Skip internal rowid in visual fields
-        
+
         const card = document.createElement('div');
         card.style.background = 'rgba(255, 255, 255, 0.02)';
         card.style.border = '1px solid var(--border-color)';
         card.style.borderRadius = '8px';
         card.style.padding = '8px 12px';
         card.style.textAlign = 'left';
-        
+
         const keyLabel = document.createElement('div');
         keyLabel.style.fontSize = '0.7rem';
         keyLabel.style.color = 'var(--text-secondary)';
         keyLabel.style.textTransform = 'uppercase';
         keyLabel.style.fontWeight = '600';
         keyLabel.textContent = key.replace(/_/g, ' ');
-        
+
         const valLabel = document.createElement('div');
         valLabel.style.fontSize = '0.85rem';
         valLabel.style.fontWeight = '500';
         valLabel.style.marginTop = '4px';
         valLabel.style.wordBreak = 'break-all';
-        
+
         const rawVal = row[key];
         if (rawVal === null || String(rawVal).trim() === '') {
             valLabel.innerHTML = '<span class="text-muted" style="font-size: 0.8rem; font-style: italic;">Tanımsız</span>';
         } else {
             valLabel.textContent = rawVal;
         }
-        
+
         card.appendChild(keyLabel);
         card.appendChild(valLabel);
         container.appendChild(card);
     });
-    
+
     modal.classList.add('active');
 }
 
