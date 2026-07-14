@@ -1897,9 +1897,20 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+}
+
+.col-name-text {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: left;
 }
 
 .column-item-type {

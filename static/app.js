@@ -1900,11 +1900,11 @@ function renderColumnsList(role, tableName, relations) {
 
         item.innerHTML = `
             <span class="column-item-name">
-                <i class="fa-solid fa-columns text-muted text-xs"></i>
-                ${col}
-                ${badgesHtml}
+                <i class="fa-solid fa-columns text-muted text-xs" style="flex-shrink: 0;"></i>
+                <span class="col-name-text">${col}</span>
+                <span style="display: inline-flex; gap: 4px; flex-shrink: 0; align-items: center;">${badgesHtml}</span>
             </span>
-            <span class="column-item-type">${colType}</span>
+            <span class="column-item-type" style="flex-shrink: 0; margin-left: 8px;">${colType}</span>
         `;
 
         item.addEventListener('click', () => {
