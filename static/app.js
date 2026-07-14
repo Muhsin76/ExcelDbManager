@@ -2873,15 +2873,14 @@ function renderInventoryChart(sortedGroups) {
 
     if (sortedGroups.length === 0) return;
 
-    // Prepare chart labels and data (Top 5 + "Diğer" logic to avoid pie chart clutter)
+    const totalQty = sortedGroups.reduce((sum, [_, count]) => sum + count, 0);
     const labels = [];
     const data = [];
-
-    const limit = 5;
     let othersSum = 0;
 
     sortedGroups.forEach(([name, count], idx) => {
-        if (idx < limit) {
+        const pct = totalQty > 0 ? (count / totalQty) * 100 : 0;
+        if (idx < 5 || pct >= 1.0) {
             labels.push(name);
             data.push(count);
         } else {
