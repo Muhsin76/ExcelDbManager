@@ -2037,29 +2037,18 @@ function renderRelationsList(relations) {
     tbody.innerHTML = '';
 
     if (relations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Henüz tanımlı ilişki bulunmamaktadır.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Henüz tanımlı ilişki bulunmamaktadır.</td></tr>';
         return;
     }
 
-    const actionTranslation = {
-        'CASCADE': 'Otomatik Sil/Güncelle',
-        'SET NULL': 'Boş Bırak (SET NULL)',
-        'RESTRICT': 'Engelle (RESTRICT)',
-        'NO ACTION': 'Eylemsiz'
-    };
-
     relations.forEach(r => {
-        let deleteText, updateText, directionIcon, parentBadgeClass, childBadgeClass;
+        let directionIcon, parentBadgeClass, childBadgeClass;
 
         if (r.is_logical) {
-            deleteText = 'Sanal (Filtreleme)';
-            updateText = 'Sanal (Filtreleme)';
             directionIcon = '<i class="fa-solid fa-circle-nodes text-warning" title="Sanal İlişki (Veritabanı kısıtı yoktur)"></i>';
             parentBadgeClass = 'badge-logical';
             childBadgeClass = 'badge-fk';
         } else {
-            deleteText = r.on_delete === 'CASCADE' ? 'Otomatik Sil' : (actionTranslation[r.on_delete] || r.on_delete);
-            updateText = r.on_update === 'CASCADE' ? 'Otomatik Güncelle' : (actionTranslation[r.on_update] || r.on_update);
             directionIcon = '<i class="fa-solid fa-link text-indigo" title="Fiziksel SQL İlişkisi"></i>';
             parentBadgeClass = 'badge-pk';
             childBadgeClass = 'badge-fk';
@@ -2072,8 +2061,6 @@ function renderRelationsList(relations) {
             <td class="text-center">${directionIcon}</td>
             <td><strong>${r.child_table}</strong></td>
             <td><span class="badge ${childBadgeClass}">${r.child_column}</span></td>
-            <td><span class="badge" style="background: ${r.is_logical ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; color: ${r.is_logical ? 'var(--warning)' : 'var(--danger)'};">${deleteText}</span></td>
-            <td><span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);">${updateText}</span></td>
             <td>
                 <button class="btn btn-danger btn-sm" onclick="deleteRelation('${r.child_table}', '${r.child_column}', '${r.parent_table}', '${r.parent_column}', ${r.is_logical})">
                     <i class="fa-solid fa-link-slash"></i> İlişkiyi Kaldır
