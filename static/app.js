@@ -9,6 +9,7 @@ const state = {
         rows: [],
         mappedCols: {
             material: '',
+            model: '',
             qty: 'row_count',
             mac: '',
             serial: ''
@@ -17,9 +18,9 @@ const state = {
         chartInstance: null,
         filters: {
             search: '',
-            sort: 'qty_desc',
-            qtyCond: 'all',
-            qtyVal: null
+            qtyFilterStr: '',
+            sortCol: 'id',
+            sortOrder: 'asc'
         }
     },
     tableData: {
@@ -2351,7 +2352,7 @@ async function loadInventoryTab() {
         });
 
         // Mapping dropdowns change events
-        ['inv-col-material', 'inv-col-qty', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
+        ['inv-col-material', 'inv-col-model', 'inv-col-qty', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', (e) => {
@@ -2401,7 +2402,7 @@ async function loadInventoryTab() {
 
                 const mapped = state.inventoryState.mappedCols;
                 if (!mapped.material) {
-                    showToast('Malzeme/Cihaz Adı sütununu seçmelisiniz.', 'error');
+                    showToast('Malzeme Adı sütununu seçmelisiniz.', 'error');
                     return;
                 }
 
@@ -2415,6 +2416,7 @@ async function loadInventoryTab() {
                         body: JSON.stringify({
                             table_name: tableName,
                             material: mapped.material,
+                            model: mapped.model,
                             qty: mapped.qty,
                             mac: mapped.mac,
                             serial: mapped.serial
@@ -2468,44 +2470,51 @@ async function loadInventoryTab() {
             });
         }
 
-        // Search & Filter listeners
-        const searchInput = document.getElementById('inv-search-material');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
+        // Search & Filter listeners for detailed list
+        const detSearchInput = document.getElementById('inv-details-search');
+        if (detSearchInput) {
+            detSearchInput.addEventListener('input', (e) => {
                 state.inventoryState.filters.search = e.target.value;
-                calculateAndRenderInventory();
+                renderInventoryDevicesTable();
             });
         }
 
-        const sortSelect = document.getElementById('inv-sort-order');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', (e) => {
-                state.inventoryState.filters.sort = e.target.value;
-                calculateAndRenderInventory();
+        const detQtyInput = document.getElementById('inv-details-qty-filter');
+        if (detQtyInput) {
+            detQtyInput.addEventListener('input', (e) => {
+                state.inventoryState.filters.qtyFilterStr = e.target.value;
+                renderInventoryDevicesTable();
             });
         }
 
-        const qtyCondSelect = document.getElementById('inv-qty-cond');
-        const qtyValInput = document.getElementById('inv-qty-val');
-        
-        if (qtyCondSelect && qtyValInput) {
-            qtyCondSelect.addEventListener('change', (e) => {
-                const cond = e.target.value;
-                state.inventoryState.filters.qtyCond = cond;
-                if (cond === 'all') {
-                    qtyValInput.disabled = true;
-                    qtyValInput.value = '';
-                    state.inventoryState.filters.qtyVal = null;
-                } else {
-                    qtyValInput.disabled = false;
-                }
-                calculateAndRenderInventory();
-            });
-
-            qtyValInput.addEventListener('input', (e) => {
-                const val = e.target.value ? parseFloat(e.target.value) : null;
-                state.inventoryState.filters.qtyVal = val;
-                calculateAndRenderInventory();
+        // Header click sort listeners
+        const headersRow = document.getElementById('inv-details-headers');
+        if (headersRow) {
+            headersRow.querySelectorAll('th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    const currentOrder = state.inventoryState.filters.sortOrder;
+                    const currentCol = state.inventoryState.filters.sortCol;
+                    
+                    let newOrder = 'asc';
+                    if (currentCol === col) {
+                        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+                    }
+                    
+                    state.inventoryState.filters.sortCol = col;
+                    state.inventoryState.filters.sortOrder = newOrder;
+                    
+                    // Update header icons
+                    headersRow.querySelectorAll('th[data-sort] i').forEach(icon => {
+                        icon.className = 'fa-solid fa-sort text-muted ms-1';
+                    });
+                    const activeIcon = th.querySelector('i');
+                    if (activeIcon) {
+                        activeIcon.className = `fa-solid fa-sort-${newOrder === 'asc' ? 'up' : 'down'} ms-1`;
+                    }
+                    
+                    renderInventoryDevicesTable();
+                });
             });
         }
     }
@@ -2520,24 +2529,28 @@ async function loadInventoryTableData(tableName) {
     // Reset filters
     state.inventoryState.filters = {
         search: '',
-        sort: 'qty_desc',
-        qtyCond: 'all',
-        qtyVal: null
+        qtyFilterStr: '',
+        sortCol: 'id',
+        sortOrder: 'asc'
     };
     
-    const searchInput = document.getElementById('inv-search-material');
-    if (searchInput) searchInput.value = '';
+    const detSearchInput = document.getElementById('inv-details-search');
+    if (detSearchInput) detSearchInput.value = '';
     
-    const sortSelect = document.getElementById('inv-sort-order');
-    if (sortSelect) sortSelect.value = 'qty_desc';
+    const detQtyInput = document.getElementById('inv-details-qty-filter');
+    if (detQtyInput) detQtyInput.value = '';
     
-    const qtyCondSelect = document.getElementById('inv-qty-cond');
-    if (qtyCondSelect) qtyCondSelect.value = 'all';
-    
-    const qtyValInput = document.getElementById('inv-qty-val');
-    if (qtyValInput) {
-        qtyValInput.value = '';
-        qtyValInput.disabled = true;
+    // Reset header icons
+    const headersRow = document.getElementById('inv-details-headers');
+    if (headersRow) {
+        headersRow.querySelectorAll('th[data-sort] i').forEach(icon => {
+            const th = icon.closest('th');
+            if (th && th.getAttribute('data-sort') === 'id') {
+                icon.className = 'fa-solid fa-sort-up ms-1';
+            } else {
+                icon.className = 'fa-solid fa-sort text-muted ms-1';
+            }
+        });
     }
 
     // Hide clear filter button
@@ -2561,18 +2574,21 @@ async function loadInventoryTableData(tableName) {
                 const colExists = (col) => data.columns.includes(col);
 
                 const matVal = colExists(mapping.material) ? mapping.material : '';
+                const modelVal = colExists(mapping.model) ? mapping.model : '';
                 const qtyVal = (mapping.qty === 'row_count' || colExists(mapping.qty)) ? mapping.qty : 'row_count';
                 const macVal = colExists(mapping.mac) ? mapping.mac : '';
                 const serialVal = colExists(mapping.serial) ? mapping.serial : '';
 
                 // Update dropdown values
                 document.getElementById('inv-col-material').value = matVal;
+                document.getElementById('inv-col-model').value = modelVal;
                 document.getElementById('inv-col-qty').value = qtyVal;
                 document.getElementById('inv-col-mac').value = macVal;
                 document.getElementById('inv-col-serial').value = serialVal;
 
                 // Update State
                 state.inventoryState.mappedCols.material = matVal;
+                state.inventoryState.mappedCols.model = modelVal;
                 state.inventoryState.mappedCols.qty = qtyVal;
                 state.inventoryState.mappedCols.mac = macVal;
                 state.inventoryState.mappedCols.serial = serialVal;
@@ -2610,11 +2626,13 @@ async function loadInventoryTableData(tableName) {
 
 function populateInventoryMappingSelects(columns) {
     const materialSelect = document.getElementById('inv-col-material');
+    const modelSelect = document.getElementById('inv-col-model');
     const qtySelect = document.getElementById('inv-col-qty');
     const macSelect = document.getElementById('inv-col-mac');
     const serialSelect = document.getElementById('inv-col-serial');
 
     materialSelect.innerHTML = '<option value="" disabled selected>Seçiniz...</option>';
+    if (modelSelect) modelSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
     qtySelect.innerHTML = '<option value="row_count">Her satır 1 adet (Satır Sayısı)</option>';
     macSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
     serialSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
@@ -2625,6 +2643,14 @@ function populateInventoryMappingSelects(columns) {
         optMat.value = col;
         optMat.textContent = col;
         materialSelect.appendChild(optMat);
+
+        // Model Options
+        if (modelSelect) {
+            const optMod = document.createElement('option');
+            optMod.value = col;
+            optMod.textContent = col;
+            modelSelect.appendChild(optMod);
+        }
 
         // Qty Options
         const optQty = document.createElement('option');
@@ -2648,21 +2674,22 @@ function populateInventoryMappingSelects(columns) {
 
 function guessInventoryColumns(columns) {
     const matSelect = document.getElementById('inv-col-material');
+    const modelSelect = document.getElementById('inv-col-model');
     const qtySelect = document.getElementById('inv-col-qty');
     const macSelect = document.getElementById('inv-col-mac');
     const serSelect = document.getElementById('inv-col-serial');
 
     let guessedMat = '';
+    let guessedModel = '';
     let guessedQty = 'row_count';
     let guessedMac = '';
     let guessedSer = '';
 
     // Guess Material: look for keywords
-    const matKeywords = ['malzeme', 'ürün', 'urun', 'ad', 'name', 'model', 'cihaz_adi', 'cihaz', 'tanim', 'description', 'type', 'tip', 'kategori', 'category'];
+    const matKeywords = ['malzeme', 'ürün', 'urun', 'ad', 'name', 'cihaz_adi', 'cihaz', 'tanim', 'description'];
     for (const col of columns) {
         const lower = col.toLowerCase();
         if (matKeywords.some(k => lower === k || lower.includes(k))) {
-            // Prefer exact matches first, or contains
             guessedMat = col;
             break;
         }
@@ -2670,6 +2697,16 @@ function guessInventoryColumns(columns) {
     // Default to first user column if no guess
     if (!guessedMat && columns.length > 0) {
         guessedMat = columns[0];
+    }
+
+    // Guess Model
+    const modelKeywords = ['model', 'type', 'tip', 'kategori', 'category', 'marka', 'brand'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (modelKeywords.some(k => lower === k || lower.includes(k))) {
+            guessedModel = col;
+            break;
+        }
     }
 
     // Guess Qty
@@ -2703,15 +2740,18 @@ function guessInventoryColumns(columns) {
     }
 
     // Update Select values
-    matSelect.value = guessedMat;
-    qtySelect.value = guessedQty;
-    macSelect.value = guessedMac;
-    serSelect.value = guessedSer;
+    if (matSelect) matSelect.value = guessedMat;
+    if (modelSelect) modelSelect.value = guessedModel;
+    if (qtySelect) qtySelect.value = guessedQty;
+    if (macSelect) macSelect.value = guessedMac;
+    if (serSelect) serSelect.value = guessedSer;
 
     // Update State
     state.inventoryState.mappedCols.material = guessedMat;
+    state.inventoryState.mappedCols.model = guessedModel;
     state.inventoryState.mappedCols.qty = guessedQty;
     state.inventoryState.mappedCols.mac = guessedMac;
+    state.inventoryState.mappedCols.serial = guessedSer;
     state.inventoryState.mappedCols.serial = guessedSer;
 }
 
@@ -2763,47 +2803,17 @@ function calculateAndRenderInventory() {
     document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
     document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
 
-    // Filter and sort groups based on user filter state
-    let filteredGroups = Object.entries(groups);
-    
-    // 1. Search filter
-    const searchVal = (state.inventoryState.filters.search || '').trim().toLowerCase();
-    if (searchVal) {
-        filteredGroups = filteredGroups.filter(([name, count]) => name.toLowerCase().includes(searchVal));
-    }
-    
-    // 2. Quantity filter
-    const qtyCond = state.inventoryState.filters.qtyCond || 'all';
-    const qtyVal = parseFloat(state.inventoryState.filters.qtyVal);
-    if (qtyCond !== 'all' && !isNaN(qtyVal)) {
-        filteredGroups = filteredGroups.filter(([name, count]) => {
-            if (qtyCond === 'lt') return count < qtyVal;
-            if (qtyCond === 'gt') return count > qtyVal;
-            if (qtyCond === 'eq') return count === qtyVal;
-            return true;
-        });
-    }
-    
-    // 3. Sort order
-    const sortOrder = state.inventoryState.filters.sort || 'qty_desc';
-    if (sortOrder === 'qty_desc') {
-        filteredGroups.sort((a, b) => b[1] - a[1]);
-    } else if (sortOrder === 'qty_asc') {
-        filteredGroups.sort((a, b) => a[1] - b[1]);
-    } else if (sortOrder === 'name_asc') {
-        filteredGroups.sort((a, b) => a[0].localeCompare(b[0], 'tr'));
-    } else if (sortOrder === 'name_desc') {
-        filteredGroups.sort((a, b) => b[0].localeCompare(a[0], 'tr'));
-    }
+    // Sort groups based on quantity descending (default "Çoktan Aza" for left list)
+    const sortedGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
 
-    // Keep filtered groups in state
-    state.inventoryState.filteredGroups = filteredGroups;
+    // Keep all groups in state
+    state.inventoryState.filteredGroups = sortedGroups;
 
     // Render distribution table
-    renderDistributionTable(filteredGroups, totalQty);
+    renderDistributionTable(sortedGroups, totalQty);
 
     // Render Chart.js Graph
-    renderInventoryChart(filteredGroups);
+    renderInventoryChart(sortedGroups);
 
     // Render Details List
     renderInventoryDevicesTable();
@@ -2988,14 +2998,74 @@ function renderInventoryDevicesTable() {
 
     if (!mapped.material) return;
 
-    // Filter rows by material
+    // 1. Filter rows by material first
     let filteredRows = [];
     if (selected) {
         filteredRows = rows.filter(r => String(r[mapped.material] || 'Tanımlanmamış').trim() === selected);
     } else {
-        const visibleMaterials = new Set((state.inventoryState.filteredGroups || []).map(([name, count]) => name));
-        filteredRows = rows.filter(r => visibleMaterials.has(String(r[mapped.material] || 'Tanımlanmamış').trim()));
+        filteredRows = [...rows];
     }
+
+    // 2. Apply Search Filter (on Material, Model, MAC, Serial)
+    const searchVal = (state.inventoryState.filters.search || '').trim().toLowerCase();
+    if (searchVal) {
+        filteredRows = filteredRows.filter(row => {
+            const mat = String(row[mapped.material] || '').toLowerCase();
+            const model = mapped.model ? String(row[mapped.model] || '').toLowerCase() : '';
+            const mac = mapped.mac ? String(row[mapped.mac] || '').toLowerCase() : '';
+            const serial = mapped.serial ? String(row[mapped.serial] || '').toLowerCase() : '';
+            return mat.includes(searchVal) || model.includes(searchVal) || mac.includes(searchVal) || serial.includes(searchVal);
+        });
+    }
+
+    // 3. Apply Quantity Expression Filter (e.g. <20, >20, 20)
+    const qtyFilterStr = (state.inventoryState.filters.qtyFilterStr || '').trim();
+    if (qtyFilterStr) {
+        const qtyMatch = qtyFilterStr.match(/^(<=|>=|<|>|=)?\s*([0-9.-]+)$/);
+        if (qtyMatch) {
+            const operator = qtyMatch[1] || '=';
+            const value = parseFloat(qtyMatch[2]);
+            if (!isNaN(value)) {
+                filteredRows = filteredRows.filter(row => {
+                    const qty = mapped.qty === 'row_count' ? 1 : parseFloat(row[mapped.qty]) || 0;
+                    if (operator === '<') return qty < value;
+                    if (operator === '>') return qty > value;
+                    if (operator === '<=') return qty <= value;
+                    if (operator === '>=') return qty >= value;
+                    if (operator === '=') return qty === value;
+                    return true;
+                });
+            }
+        }
+    }
+
+    // 4. Apply Header Column Sorting
+    const sortCol = state.inventoryState.filters.sortCol || 'id';
+    const sortOrder = state.inventoryState.filters.sortOrder || 'asc';
+    
+    filteredRows.sort((a, b) => {
+        let valA, valB;
+        if (sortCol === 'id') {
+            valA = a._rowid_ || 0;
+            valB = b._rowid_ || 0;
+        } else if (sortCol === 'qty') {
+            valA = mapped.qty === 'row_count' ? 1 : parseFloat(a[mapped.qty]) || 0;
+            valB = mapped.qty === 'row_count' ? 1 : parseFloat(b[mapped.qty]) || 0;
+        } else {
+            const colName = mapped[sortCol];
+            valA = colName ? String(a[colName] || '').trim() : '';
+            valB = colName ? String(b[colName] || '').trim() : '';
+        }
+        
+        let compareResult = 0;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+            compareResult = valA - valB;
+        } else {
+            compareResult = String(valA).localeCompare(String(valB), 'tr');
+        }
+        
+        return sortOrder === 'asc' ? compareResult : -compareResult;
+    });
 
     // Update Title
     title.innerHTML = selected
@@ -3003,7 +3073,7 @@ function renderInventoryDevicesTable() {
         : `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Detay Listesi (${filteredRows.length} Adet)`;
 
     if (filteredRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
         return;
     }
 
@@ -3011,18 +3081,24 @@ function renderInventoryDevicesTable() {
         const tr = document.createElement('tr');
 
         const matVal = row[mapped.material] || 'Tanımlanmamış';
+        const modelVal = mapped.model && row[mapped.model] !== null ? String(row[mapped.model]).trim() : '';
+        const qtyVal = mapped.qty === 'row_count' ? 1 : parseFloat(row[mapped.qty]) || 0;
         const macVal = mapped.mac && row[mapped.mac] !== null ? String(row[mapped.mac]).trim() : '';
         const serVal = mapped.serial && row[mapped.serial] !== null ? String(row[mapped.serial]).trim() : '';
 
+        const modelCell = modelVal ? `<span class="font-medium text-secondary">${modelVal}</span>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
+        const qtyCell = `<span class="font-semibold text-secondary">${qtyVal.toLocaleString()}</span>`;
         const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
         const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
 
         tr.innerHTML = `
             <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
             <td class="font-medium" style="text-align: left;">${matVal}</td>
-            <td style="text-align: left; width: 200px;">${macCell}</td>
-            <td style="text-align: left; width: 200px;">${serCell}</td>
-            <td style="text-align: center; width: 120px;">
+            <td class="font-medium" style="text-align: left;">${modelCell}</td>
+            <td style="text-align: right; width: 90px;">${qtyCell}</td>
+            <td style="text-align: left; width: 180px;">${serCell}</td>
+            <td style="text-align: left; width: 180px;">${macCell}</td>
+            <td style="text-align: center; width: 100px;">
                 <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 3px 6px;">
                     <i class="fa-solid fa-circle-info"></i> Detay Kartı
                 </button>
