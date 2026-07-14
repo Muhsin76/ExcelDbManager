@@ -645,6 +645,33 @@
                                 <!-- List of materials and quantities -->
                                 <div class="relation-table-view card-glass" style="flex: 1.2; padding: 20px; display: flex; flex-direction: column;">
                                     <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px; text-align: left;"><i class="fa-solid fa-list-ol text-indigo"></i> Malzeme Dağılım Listesi</h3>
+                                    
+                                    <!-- Search & Filter Controls -->
+                                    <div class="inv-filters-row" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; background: rgba(255, 255, 255, 0.02); padding: 8px; border-radius: 10px; border: 1px solid var(--border-color);">
+                                        <div style="flex: 1.5; min-width: 140px;">
+                                            <input type="text" id="inv-search-material" class="form-control form-control-sm" placeholder="Malzeme adı ara..." style="width: 100%; height: 32px;" />
+                                        </div>
+                                        <div style="flex: 1; min-width: 100px;">
+                                            <select id="inv-sort-order" class="form-control form-control-sm" style="width: 100%; height: 32px; padding: 4px 8px;">
+                                                <option value="qty_desc" selected>Çoktan Aza</option>
+                                                <option value="qty_asc">Azdan Çoğa</option>
+                                                <option value="name_asc">İsim (A-Z)</option>
+                                                <option value="name_desc">İsim (Z-A)</option>
+                                            </select>
+                                        </div>
+                                        <div style="flex: 1; min-width: 100px;">
+                                            <select id="inv-qty-cond" class="form-control form-control-sm" style="width: 100%; height: 32px; padding: 4px 8px;">
+                                                <option value="all" selected>Miktar (Tümü)</option>
+                                                <option value="lt">Küçük (&lt;)</option>
+                                                <option value="gt">Büyük (&gt;)</option>
+                                                <option value="eq">Eşit (=)</option>
+                                            </select>
+                                        </div>
+                                        <div style="width: 60px;">
+                                            <input type="number" id="inv-qty-val" class="form-control form-control-sm" placeholder="Sayı" min="0" style="width: 100%; height: 32px;" disabled />
+                                        </div>
+                                    </div>
+                                    
                                     <div style="flex-grow: 1; overflow-y: auto; max-height: 280px; border: 1px solid var(--border-color); border-radius: 8px;">
                                         <table class="custom-table" style="font-size: 0.85rem; width: 100%;">
                                             <thead>
