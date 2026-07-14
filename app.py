@@ -48,11 +48,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS _sys_inventory_mappings (
             table_name TEXT PRIMARY KEY,
             material_col TEXT,
+            model_col TEXT,
             qty_col TEXT,
             mac_col TEXT,
             serial_col TEXT
         );
     """)
+    # Try adding model_col if table already existed without it
+    try:
+        cursor.execute("ALTER TABLE _sys_inventory_mappings ADD COLUMN model_col TEXT;")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -1660,7 +1666,7 @@ def get_inventory_mapping(table_name):
             return jsonify({'success': True, 'mapping': None})
             
         cursor.execute("""
-            SELECT material_col, qty_col, mac_col, serial_col 
+            SELECT material_col, model_col, qty_col, mac_col, serial_col 
             FROM _sys_inventory_mappings 
             WHERE table_name = ?;
         """, (table_name,))
@@ -1672,6 +1678,7 @@ def get_inventory_mapping(table_name):
                 'success': True,
                 'mapping': {
                     'material': row['material_col'],
+                    'model': row['model_col'],
                     'qty': row['qty_col'],
                     'mac': row['mac_col'],
                     'serial': row['serial_col']
@@ -1688,6 +1695,7 @@ def save_inventory_mapping():
         data = request.json
         table_name = sanitize_name(data.get('table_name'))
         material_col = data.get('material')
+        model_col = data.get('model')
         qty_col = data.get('qty')
         mac_col = data.get('mac')
         serial_col = data.get('serial')
@@ -1698,14 +1706,15 @@ def save_inventory_mapping():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO _sys_inventory_mappings (table_name, material_col, qty_col, mac_col, serial_col)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO _sys_inventory_mappings (table_name, material_col, model_col, qty_col, mac_col, serial_col)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(table_name) DO UPDATE SET
                 material_col = excluded.material_col,
+                model_col = excluded.model_col,
                 qty_col = excluded.qty_col,
                 mac_col = excluded.mac_col,
                 serial_col = excluded.serial_col;
-        """, (table_name, material_col, qty_col, mac_col, serial_col))
+        """, (table_name, material_col, model_col, qty_col, mac_col, serial_col))
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': 'Eşleştirme başarıyla kaydedildi.'})
