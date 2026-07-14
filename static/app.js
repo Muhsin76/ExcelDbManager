@@ -2382,6 +2382,85 @@ async function loadInventoryTab() {
         if (btnCloseModal2) {
             btnCloseModal2.addEventListener('click', closeDeviceDetailModal);
         }
+
+        // Save Mapping button click
+        const btnSaveMapping = document.getElementById('btn-save-inv-mapping');
+        if (btnSaveMapping) {
+            btnSaveMapping.addEventListener('click', async () => {
+                const tableName = state.inventoryState.activeTable;
+                if (!tableName) {
+                    showToast('Lütfen önce bir tablo seçin.', 'error');
+                    return;
+                }
+                
+                const mapped = state.inventoryState.mappedCols;
+                if (!mapped.material) {
+                    showToast('Malzeme/Cihaz Adı sütununu seçmelisiniz.', 'error');
+                    return;
+                }
+                
+                showLoader('Eşleştirme kaydediliyor...');
+                try {
+                    const res = await apiCall('/api/inventory/mapping', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            table_name: tableName,
+                            material: mapped.material,
+                            qty: mapped.qty,
+                            mac: mapped.mac,
+                            serial: mapped.serial
+                        })
+                    });
+                    
+                    if (res && res.success) {
+                        showToast(res.message || 'Eşleştirme kaydedildi.');
+                        const btnDelMapping = document.getElementById('btn-delete-inv-mapping');
+                        if (btnDelMapping) btnDelMapping.classList.remove('hidden');
+                    } else {
+                        showToast(res.error || 'Kaydederken bir hata oluştu.', 'error');
+                    }
+                } catch (err) {
+                    console.error('Error saving mapping:', err);
+                    showToast('Kaydederken bir hata oluştu.', 'error');
+                } finally {
+                    hideLoader();
+                }
+            });
+        }
+        
+        // Delete Mapping button click
+        const btnDeleteMapping = document.getElementById('btn-delete-inv-mapping');
+        if (btnDeleteMapping) {
+            btnDeleteMapping.addEventListener('click', async () => {
+                const tableName = state.inventoryState.activeTable;
+                if (!tableName) return;
+                
+                showLoader('Eşleştirme siliniyor...');
+                try {
+                    const res = await apiCall(`/api/inventory/mapping/${tableName}`, {
+                        method: 'DELETE'
+                    });
+                    if (res && res.success) {
+                        showToast(res.message || 'Eşleştirme silindi.');
+                        btnDeleteMapping.classList.add('hidden');
+                        
+                        // Recalculate auto-guess
+                        guessInventoryColumns(state.inventoryState.columns);
+                        calculateAndRenderInventory();
+                    } else {
+                        showToast(res.error || 'Silerken bir hata oluştu.', 'error');
+                    }
+                } catch (err) {
+                    console.error('Error deleting mapping:', err);
+                    showToast('Silerken bir hata oluştu.', 'error');
+                } finally {
+                    hideLoader();
+                }
+            });
+        }
     }
 }
 
@@ -2403,8 +2482,48 @@ async function loadInventoryTableData(tableName) {
         // Populate mappings dropdowns
         populateInventoryMappingSelects(data.columns);
         
-        // Guess column mappings
-        guessInventoryColumns(data.columns);
+        // Check if there is a saved mapping
+        let hasSavedMapping = false;
+        try {
+            const mapRes = await apiCall(`/api/inventory/mapping/${tableName}`);
+            if (mapRes && mapRes.success && mapRes.mapping) {
+                const mapping = mapRes.mapping;
+                const colExists = (col) => data.columns.includes(col);
+                
+                const matVal = colExists(mapping.material) ? mapping.material : '';
+                const qtyVal = (mapping.qty === 'row_count' || colExists(mapping.qty)) ? mapping.qty : 'row_count';
+                const macVal = colExists(mapping.mac) ? mapping.mac : '';
+                const serialVal = colExists(mapping.serial) ? mapping.serial : '';
+                
+                // Update dropdown values
+                document.getElementById('inv-col-material').value = matVal;
+                document.getElementById('inv-col-qty').value = qtyVal;
+                document.getElementById('inv-col-mac').value = macVal;
+                document.getElementById('inv-col-serial').value = serialVal;
+                
+                // Update State
+                state.inventoryState.mappedCols.material = matVal;
+                state.inventoryState.mappedCols.qty = qtyVal;
+                state.inventoryState.mappedCols.mac = macVal;
+                state.inventoryState.mappedCols.serial = serialVal;
+                
+                hasSavedMapping = true;
+            }
+        } catch (mapErr) {
+            console.error('Error fetching inventory mapping:', mapErr);
+        }
+        
+        const btnDelMapping = document.getElementById('btn-delete-inv-mapping');
+        if (hasSavedMapping) {
+            // Show delete button
+            if (btnDelMapping) btnDelMapping.classList.remove('hidden');
+        } else {
+            // Guess column mappings (default)
+            guessInventoryColumns(data.columns);
+            
+            // Hide delete button
+            if (btnDelMapping) btnDelMapping.classList.add('hidden');
+        }
         
         // Render dashboard
         document.getElementById('inv-empty-state').classList.add('hidden');
