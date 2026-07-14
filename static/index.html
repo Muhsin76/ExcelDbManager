@@ -603,6 +603,19 @@
                                     <option value="">(İsteğe Bağlı) Seçiniz...</option>
                                 </select>
                             </div>
+                            
+                            <!-- Mapping actions -->
+                            <div class="form-group" style="flex: 1.2; min-width: 280px; margin-bottom: 0;">
+                                <label>&nbsp;</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <button id="btn-save-inv-mapping" class="btn btn-success" style="flex: 1; padding: 10px 12px; font-size: 0.85rem;" title="Mevcut sütun eşleştirmelerini veritabanına kaydet">
+                                        <i class="fa-solid fa-floppy-disk"></i> Eşleştirmeyi Kaydet
+                                    </button>
+                                    <button id="btn-delete-inv-mapping" class="btn btn-danger hidden" style="flex: 1; padding: 10px 12px; font-size: 0.85rem;" title="Kaydedilmiş sütun eşleştirmesini sil">
+                                        <i class="fa-solid fa-trash-can"></i> Eşleştirmeyi Sil
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Main content dashboard (hidden if no table loaded) -->
