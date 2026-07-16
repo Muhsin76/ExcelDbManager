@@ -1800,7 +1800,54 @@ def restore_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# 20. Run Raw SQL Query
+@app.route('/api/sql/run', methods=['POST'])
+def run_sql_query():
+    try:
+        data = request.json or {}
+        query = data.get('query', '').strip()
+        if not query:
+            return jsonify({'success': False, 'error': 'Sorgu boş olamaz.'}), 400
+            
+        # Clean comments to identify statement type
+        cleaned_query = re.sub(r'(--.*)|(/\*[\s\S]*?\*/)', '', query).strip()
+        if not cleaned_query:
+            return jsonify({'success': False, 'error': 'Sorgu sadece açıklama satırlarından oluşamaz.'}), 400
+            
+        first_word = cleaned_query.split()[0].upper() if cleaned_query.split() else ""
+        is_select = first_word in ['SELECT', 'PRAGMA', 'EXPLAIN', 'WITH']
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(query)
+        
+        if is_select:
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            result_rows = [dict(row) for row in rows]
+            conn.close()
+            return jsonify({
+                'success': True,
+                'is_select': True,
+                'columns': columns,
+                'rows': result_rows
+            })
+        else:
+            conn.commit()
+            rows_affected = cursor.rowcount
+            conn.close()
+            return jsonify({
+                'success': True,
+                'is_select': False,
+                'rows_affected': rows_affected,
+                'message': f'Sorgu başarıyla yürütüldü. Etkilenen satır sayısı: {rows_affected}'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
 if __name__ == '__main__':
     print("DataBase Manager starting...")
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
