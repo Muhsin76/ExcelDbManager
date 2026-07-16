@@ -55,6 +55,12 @@ const state = {
         current_sheet: '',
         columns: [], // {name, type}
         preview_rows: []
+    },
+    reportsState: {
+        activeTable: null,
+        columns: [],
+        rows: [],
+        chartInstance: null
     }
 };
 
@@ -69,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initImportEvents();
     initTableCreatorEvents();
     initRelationsEvents();
+    initReportsEvents();
 
     // Load initial data
     loadDashboardData();
@@ -132,7 +139,7 @@ function initNavigation() {
     // Handle initial hash routing
     if (window.location.hash) {
         const hash = window.location.hash.substring(1);
-        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory'];
+        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory', 'reports'];
         if (validTabs.includes(hash)) {
             switchTab(hash);
         }
@@ -187,6 +194,10 @@ function switchTab(tabId) {
         pageTitle.textContent = 'Envanter ve Cihaz Analiz Paneli';
         pageSubtitle.textContent = 'Sarf malzemelerinizi ve cihaz durumlarınızı grafiksel olarak inceleyin';
         loadInventoryTab();
+    } else if (tabId === 'reports') {
+        pageTitle.textContent = 'Grafik & Rapor Tasarımcısı';
+        pageSubtitle.textContent = 'Tablolarınızdaki verileri görselleştirin, gruplayın ve raporlar oluşturun';
+        loadReportsTab();
     }
 }
 
@@ -3163,3 +3174,519 @@ window.loadInventoryTableData = loadInventoryTableData;
 window.calculateAndRenderInventory = calculateAndRenderInventory;
 window.openDeviceDetailModal = openDeviceDetailModal;
 window.closeDeviceDetailModal = closeDeviceDetailModal;
+
+// ==========================================================================
+// CUSTOM REPORT BUILDER IMPLEMENTATION
+// ==========================================================================
+function convertTrCharToAscii(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/İ/g, 'I')
+        .replace(/Ğ/g, 'G')
+        .replace(/Ü/g, 'U')
+        .replace(/Ş/g, 'S')
+        .replace(/Ö/g, 'O')
+        .replace(/Ç/g, 'C');
+}
+
+async function loadReportsTab() {
+    const select = document.getElementById('rep-select-table');
+    if (!select) return;
+
+    // Reset fields
+    select.innerHTML = '<option value="" disabled selected>Tablo Seçin...</option>';
+    document.getElementById('rep-col-x').innerHTML = '<option value="" disabled selected>Önce tablo seçin...</option>';
+    document.getElementById('rep-col-x').disabled = true;
+    document.getElementById('rep-action-y').disabled = true;
+    document.getElementById('rep-col-y').innerHTML = '<option value="" disabled selected>Önce tablo seçin...</option>';
+    document.getElementById('rep-col-y-wrapper').classList.add('hidden');
+    document.getElementById('btn-rep-generate').disabled = true;
+    
+    // Hide panel, show empty state
+    document.getElementById('rep-content-panel').classList.add('hidden');
+    document.getElementById('rep-empty-state').classList.remove('hidden');
+
+    try {
+        const data = await apiCall('/api/tables');
+        state.tables = data.tables || [];
+
+        state.tables.forEach(tableObj => {
+            const opt = document.createElement('option');
+            opt.value = tableObj.name;
+            opt.textContent = tableObj.name;
+            select.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('Error loading tables for reports:', err);
+    }
+}
+
+function initReportsEvents() {
+    const select = document.getElementById('rep-select-table');
+    const actionY = document.getElementById('rep-action-y');
+    const btnGenerate = document.getElementById('btn-rep-generate');
+    const btnExportPng = document.getElementById('btn-rep-export-png');
+    const btnExportPdf = document.getElementById('btn-rep-export-pdf');
+
+    if (!select) return;
+
+    // Bind listeners only once using dataset flag
+    if (select.dataset.reportsListenerBound) return;
+    select.dataset.reportsListenerBound = 'true';
+
+    select.addEventListener('change', (e) => {
+        loadReportsTableData(e.target.value);
+    });
+
+    actionY.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const colYWrapper = document.getElementById('rep-col-y-wrapper');
+        const colY = document.getElementById('rep-col-y');
+        if (val === 'count') {
+            colYWrapper.classList.add('hidden');
+            colY.removeAttribute('required');
+        } else {
+            colYWrapper.classList.remove('hidden');
+            colY.setAttribute('required', 'required');
+        }
+    });
+
+    btnGenerate.addEventListener('click', () => {
+        generateCustomReport();
+    });
+
+    btnExportPng.addEventListener('click', () => {
+        exportReportPNG();
+    });
+
+    btnExportPdf.addEventListener('click', () => {
+        exportReportPDF();
+    });
+}
+
+async function loadReportsTableData(tableName) {
+    if (!tableName) return;
+    showLoader('Tablo verileri yükleniyor...');
+    state.reportsState.activeTable = tableName;
+
+    try {
+        const data = await apiCall(`/api/tables/${tableName}/all`);
+        state.reportsState.columns = data.columns || [];
+        state.reportsState.rows = data.rows || [];
+
+        // Populate X-Axis dropdown
+        const colX = document.getElementById('rep-col-x');
+        colX.innerHTML = '<option value="" disabled selected>Eksen Seçin...</option>';
+        data.columns.forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            colX.appendChild(opt);
+        });
+        colX.disabled = false;
+
+        // Populate Y-Axis dropdown (for numeric columns or general columns)
+        const colY = document.getElementById('rep-col-y');
+        colY.innerHTML = '<option value="" disabled selected>Sütun Seçin...</option>';
+        data.columns.forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            colY.appendChild(opt);
+        });
+
+        // Enable action selection and generate button
+        document.getElementById('rep-action-y').disabled = false;
+        document.getElementById('btn-rep-generate').disabled = false;
+    } catch (err) {
+        console.error('Error loading reports table data:', err);
+    } finally {
+        hideLoader();
+    }
+}
+
+function generateCustomReport() {
+    const tableName = state.reportsState.activeTable;
+    const xCol = document.getElementById('rep-col-x').value;
+    const actionY = document.getElementById('rep-action-y').value;
+    const yCol = document.getElementById('rep-col-y').value;
+    const chartType = document.getElementById('rep-chart-type').value;
+
+    if (!xCol) {
+        showToast('Lütfen X Ekseni (Gruplama Sütunu) seçin.', 'error');
+        return;
+    }
+    if (actionY !== 'count' && !yCol) {
+        showToast('Lütfen Y Ekseni Sütunu seçin.', 'error');
+        return;
+    }
+
+    const rows = state.reportsState.rows;
+    if (!rows || rows.length === 0) {
+        showToast('Tabloda görselleştirilecek veri bulunmuyor.', 'error');
+        return;
+    }
+
+    showLoader('Grafik hazırlanıyor...');
+
+    // Grouping
+    const groups = {};
+    rows.forEach(row => {
+        let xVal = row[xCol];
+        if (xVal === null || xVal === undefined || String(xVal).trim() === '') {
+            xVal = '(Boş)';
+        } else {
+            xVal = String(xVal).trim();
+        }
+
+        let yVal = 1;
+        if (actionY !== 'count') {
+            const rawY = row[yCol];
+            yVal = parseFloat(rawY);
+            if (isNaN(yVal)) {
+                yVal = 0; // default for non-numeric/empty values
+            }
+        }
+
+        if (!groups[xVal]) {
+            groups[xVal] = [];
+        }
+        groups[xVal].push(yVal);
+    });
+
+    // Aggregating
+    let labels = [];
+    let dataValues = [];
+
+    for (const key in groups) {
+        const vals = groups[key];
+        let aggVal = 0;
+
+        if (actionY === 'count') {
+            aggVal = vals.length;
+        } else if (actionY === 'sum') {
+            aggVal = vals.reduce((a, b) => a + b, 0);
+        } else if (actionY === 'avg') {
+            aggVal = vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+        } else if (actionY === 'max') {
+            aggVal = vals.length > 0 ? Math.max(...vals) : 0;
+        } else if (actionY === 'min') {
+            aggVal = vals.length > 0 ? Math.min(...vals) : 0;
+        }
+
+        // Format to 2 decimal places if floating
+        if (aggVal % 1 !== 0) {
+            aggVal = parseFloat(aggVal.toFixed(2));
+        }
+
+        labels.push(key);
+        dataValues.push(aggVal);
+    }
+
+    // Sort by label name alphabetically (or numerically if labels are numbers)
+    const combined = labels.map((lbl, idx) => ({ label: lbl, value: dataValues[idx] }));
+    combined.sort((a, b) => {
+        const aNum = parseFloat(a.label);
+        const bNum = parseFloat(b.label);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return aNum - bNum;
+        }
+        return String(a.label).localeCompare(String(b.label));
+    });
+
+    labels = combined.map(item => item.label);
+    dataValues = combined.map(item => item.value);
+
+    // Update Summary Metrics
+    document.getElementById('rep-stat-groups').textContent = labels.length;
+    document.getElementById('rep-stat-op').textContent = actionY.toUpperCase() + (actionY !== 'count' ? `(${yCol})` : '');
+    
+    const sumOfAgg = dataValues.reduce((a, b) => a + b, 0);
+    const avgOfAgg = dataValues.length > 0 ? (sumOfAgg / dataValues.length) : 0;
+    document.getElementById('rep-stat-avg').textContent = avgOfAgg % 1 !== 0 ? avgOfAgg.toFixed(2) : avgOfAgg;
+
+    // Render Table
+    const tbody = document.getElementById('rep-table-tbody');
+    tbody.innerHTML = '';
+    
+    // Sort combined by value descending for the list view so it acts as top ranks!
+    const tableSorted = [...combined].sort((a, b) => b.value - a.value);
+
+    tableSorted.forEach(item => {
+        const tr = document.createElement('tr');
+        const pct = sumOfAgg > 0 ? ((item.value / sumOfAgg) * 100).toFixed(1) : '0.0';
+
+        tr.innerHTML = `
+            <td><strong>${item.label}</strong></td>
+            <td style="text-align: right; font-weight: 600; color: var(--accent-primary);">${item.value}</td>
+            <td style="text-align: center;"><span class="badge" style="background-color: var(--border-glow); color: var(--text-primary); font-size: 0.75rem; border-radius: 4px; padding: 2px 6px;">%${pct}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Header updates
+    document.getElementById('rep-th-x').textContent = `X: ${xCol}`;
+    document.getElementById('rep-th-y').textContent = `Hesaplanan Değer: ${actionY.toUpperCase()}${actionY !== 'count' ? `(${yCol})` : ''}`;
+
+    // Render Chart
+    const ctx = document.getElementById('report-chart').getContext('2d');
+    if (state.reportsState.chartInstance) {
+        state.reportsState.chartInstance.destroy();
+    }
+
+    // Dynamic Colors
+    const isDark = document.body.classList.contains('dark-theme');
+    const textPrimary = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#ffffff';
+    const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim() || 'rgba(255,255,255,0.1)';
+
+    const numColors = labels.length;
+    const bgColors = [];
+    const borderColors = [];
+
+    for (let i = 0; i < numColors; i++) {
+        const hue = (i * (360 / Math.max(numColors, 6))) % 360;
+        bgColors.push(`hsla(${hue}, 75%, 60%, 0.7)`);
+        borderColors.push(`hsla(${hue}, 75%, 55%, 1)`);
+    }
+
+    const datasetLabel = actionY.toUpperCase() + (actionY !== 'count' ? ` (${yCol})` : ' (Satır Sayısı)');
+
+    state.reportsState.chartInstance = new Chart(ctx, {
+        type: chartType,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: datasetLabel,
+                data: dataValues,
+                backgroundColor: bgColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: ['pie', 'doughnut', 'polarArea', 'radar'].includes(chartType),
+                    position: 'bottom',
+                    labels: {
+                        color: textPrimary,
+                        font: { family: 'Inter', size: 11 }
+                    }
+                },
+                tooltip: {
+                    padding: 10,
+                    bodyFont: { family: 'Inter' },
+                    titleFont: { family: 'Inter', weight: 'bold' }
+                }
+            },
+            scales: ['pie', 'doughnut', 'polarArea', 'radar'].includes(chartType) ? {} : {
+                x: {
+                    grid: { color: borderColor },
+                    ticks: {
+                        color: textPrimary,
+                        font: { family: 'Inter', size: 10 }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: borderColor },
+                    ticks: {
+                        color: textPrimary,
+                        font: { family: 'Inter', size: 10 }
+                    }
+                }
+            }
+        }
+    });
+
+    // Show Content Panel, Hide Empty State
+    document.getElementById('rep-empty-state').classList.add('hidden');
+    document.getElementById('rep-content-panel').classList.remove('hidden');
+
+    hideLoader();
+    showToast('Grafik ve rapor başarıyla oluşturuldu.');
+}
+
+function exportReportPNG() {
+    const chart = state.reportsState.chartInstance;
+    if (!chart) {
+        showToast('İndirilecek grafik bulunamadı.', 'error');
+        return;
+    }
+
+    const tableName = state.reportsState.activeTable;
+    const imgUrl = chart.toBase64Image();
+    const link = document.createElement('a');
+    link.download = `grafik_raporu_${tableName}.png`;
+    link.href = imgUrl;
+    link.click();
+    showToast('Grafik resmi indirildi.');
+}
+
+function exportReportPDF() {
+    const chart = state.reportsState.chartInstance;
+    if (!chart) {
+        showToast('İndirilecek grafik bulunamadı.', 'error');
+        return;
+    }
+
+    const tableName = state.reportsState.activeTable;
+    const xCol = document.getElementById('rep-col-x').value;
+    const actionY = document.getElementById('rep-action-y').value;
+    const yCol = document.getElementById('rep-col-y').value;
+    
+    const groupsCount = document.getElementById('rep-stat-groups').textContent;
+    const avgVal = document.getElementById('rep-stat-avg').textContent;
+
+    try {
+        const { jsPDF } = window.jspdf;
+        // landscape orientation, A4 size
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        // Current Date
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('tr-TR') + ' ' + now.toLocaleTimeString('tr-TR');
+
+        // Draw header card
+        doc.setFillColor(31, 41, 55); // Dark blue gray background
+        doc.rect(0, 0, 297, 30, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text('DATABASE MANAGER - GRAFIK VERI RAPORU', 15, 12);
+        
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Rapor Tarihi: ${dateStr}`, 15, 22);
+
+        // Draw Meta Info
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(10);
+        doc.setFont('Helvetica', 'bold');
+        doc.text('RAPOR PARAMETRELERI', 15, 42);
+        doc.line(15, 44, 130, 44);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Hedef Tablo:`, 15, 52);
+        doc.setFont('Helvetica', 'bold');
+        doc.text(convertTrCharToAscii(tableName), 50, 52);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`X Ekseni Sutunu:`, 15, 58);
+        doc.setFont('Helvetica', 'bold');
+        doc.text(convertTrCharToAscii(xCol), 50, 58);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Y Ekseni Islemi:`, 15, 64);
+        doc.setFont('Helvetica', 'bold');
+        const metricName = actionY.toUpperCase() + (actionY !== 'count' ? `(${yCol})` : '');
+        doc.text(convertTrCharToAscii(metricName), 50, 64);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Grup Sayisi:`, 15, 70);
+        doc.setFont('Helvetica', 'bold');
+        doc.text(String(groupsCount), 50, 70);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Ortalama Deger:`, 15, 76);
+        doc.setFont('Helvetica', 'bold');
+        doc.text(String(avgVal), 50, 76);
+
+        // Add Chart Image
+        const chartImg = chart.toBase64Image();
+        doc.setFillColor(243, 244, 246);
+        doc.rect(140, 40, 142, 85, 'F'); // border background placeholder
+        doc.addImage(chartImg, 'PNG', 142, 42, 138, 81);
+
+        // Draw Aggregation Table
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(17, 24, 39);
+        doc.text('RAPOR DETAY TABLOSU', 15, 90);
+        doc.line(15, 92, 130, 92);
+
+        // Columns header
+        doc.setFillColor(229, 231, 235);
+        doc.rect(15, 96, 115, 6, 'F');
+        doc.setFontSize(8);
+        doc.setTextColor(55, 65, 81);
+        doc.text(convertTrCharToAscii(xCol).toUpperCase(), 17, 100);
+        doc.text('HESAPLANAN DEGER', 75, 100);
+        doc.text('ORAN', 112, 100);
+
+        // Populate rows (up to top 12 rows to avoid overflow)
+        let yPos = 107;
+        const tbodyRows = document.querySelectorAll('#rep-table-tbody tr');
+        let displayedRows = 0;
+
+        tbodyRows.forEach((rowEl, index) => {
+            if (displayedRows >= 12) return;
+            const cols = rowEl.querySelectorAll('td');
+            if (cols.length === 3) {
+                const label = cols[0].textContent;
+                const val = cols[1].textContent;
+                const pct = cols[2].textContent;
+
+                // Alternate row background
+                if (displayedRows % 2 === 1) {
+                    doc.setFillColor(249, 250, 251);
+                    doc.rect(15, yPos - 4, 115, 6, 'F');
+                }
+
+                doc.setTextColor(17, 24, 39);
+                doc.setFont('Helvetica', 'normal');
+                
+                // Crop labels if too long
+                let displayLabel = label;
+                if (displayLabel.length > 25) {
+                    displayLabel = displayLabel.substring(0, 23) + '..';
+                }
+
+                doc.text(convertTrCharToAscii(displayLabel), 17, yPos);
+                doc.text(String(val), 75, yPos);
+                doc.text(String(pct), 112, yPos);
+                yPos += 6;
+                displayedRows++;
+            }
+        });
+
+        if (tbodyRows.length > 12) {
+            doc.setFont('Helvetica', 'oblique');
+            doc.setTextColor(107, 114, 128);
+            doc.text(`* Toplam ${tbodyRows.length} kayittan ilk 12'si gosterilmektedir.`, 15, yPos + 1);
+        }
+
+        // Draw Footer
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(156, 163, 175);
+        doc.text('ExcelDbManager Raporlama Modulu tarafindan otomatik olarak uretilmistir.', 15, 200);
+
+        doc.save(`Rapor_${tableName}.pdf`);
+        showToast('PDF Raporu başarıyla oluşturuldu ve indirildi.');
+    } catch (err) {
+        console.error('PDF Generation Error:', err);
+        showToast('PDF raporu oluşturulurken hata oluştu.', 'error');
+    }
+}
+
+window.loadReportsTab = loadReportsTab;
+window.initReportsEvents = initReportsEvents;
+window.loadReportsTableData = loadReportsTableData;
+window.generateCustomReport = generateCustomReport;
+window.exportReportPNG = exportReportPNG;
+window.exportReportPDF = exportReportPDF;
