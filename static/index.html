@@ -51,6 +51,10 @@
                     <i class="fa-solid fa-boxes-stacked"></i>
                     <span>Envanter Analizi</span>
                 </a>
+                <a href="#sql-console" class="nav-item" data-tab="sql-console">
+                    <i class="fa-solid fa-terminal"></i>
+                    <span>SQL Konsolu</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <button id="theme-toggle" class="theme-btn" title="Temayı Değiştir">
@@ -745,6 +749,52 @@
                             <i class="fa-solid fa-chart-line text-muted" style="font-size: 3rem; opacity: 0.3; margin-bottom: 16px;"></i>
                             <h4 class="text-muted">Analiz Yapmak İçin Tablo Seçin</h4>
                             <p class="text-muted text-sm" style="max-width: 500px; margin: 8px auto 0;">Yukarıdaki listeden sarf envanterinizi barındıran tabloyu seçtiğinizde grafikler ve cihaz listeleri otomatik olarak hazırlanacaktır.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. SQL QUERY CONSOLE VIEW -->
+                <section id="view-sql-console" class="tab-view">
+                    <div class="sql-console-layout card-glass" style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                        <div class="console-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                            <div style="text-align: left;">
+                                <h3 style="font-size: 1.3rem; font-weight: 700; margin: 0;"><i class="fa-solid fa-terminal text-indigo" style="margin-right: 8px;"></i> SQL Sorgu Konsolu</h3>
+                                <p class="text-secondary text-sm" style="margin: 4px 0 0 0;">Veritabanınız (data.db) üzerinde doğrudan ham SQL sorguları yazın ve çalıştırın.</p>
+                            </div>
+                            <div class="console-actions" style="display: flex; gap: 12px;">
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-sql-clear" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;">
+                                    <i class="fa-solid fa-eraser"></i> Temizle
+                                </button>
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-sql-run" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;">
+                                    <i class="fa-solid fa-play"></i> Çalıştır
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Editor Textarea Area -->
+                        <div class="console-editor-wrapper" style="display: flex; flex-direction: column; gap: 8px; text-align: left;">
+                            <label for="sql-query-input" style="font-weight: 600; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">SQL Sorgusu:</label>
+                            <textarea id="sql-query-input" placeholder="SELECT * FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';" style="width: 100%; height: 140px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; color: #66d9ef; font-family: 'Consolas', 'Courier New', Courier, monospace; font-size: 0.95rem; padding: 12px; resize: vertical; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); line-height: 1.5;"></textarea>
+                            <div class="console-suggestions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);"><i class="fa-solid fa-lightbulb"></i> Hazır Şablonlar:</span>
+                                <button type="button" class="btn btn-link btn-xs btn-sample-query" data-query="SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';" style="padding: 2px 6px; font-size: 0.75rem; text-decoration: none;">Tabloları Listele</button>
+                                <button type="button" class="btn btn-link btn-xs btn-sample-query" data-query="SELECT * FROM _sys_logical_relations;" style="padding: 2px 6px; font-size: 0.75rem; text-decoration: none;">Tablo İlişkileri</button>
+                                <button type="button" class="btn btn-link btn-xs btn-sample-query" data-query="SELECT * FROM _sys_inventory_mappings;" style="padding: 2px 6px; font-size: 0.75rem; text-decoration: none;">Envanter Eşleştirmeleri</button>
+                            </div>
+                        </div>
+
+                        <!-- Results Container -->
+                        <div class="console-results-wrapper" style="border-top: 1px dashed var(--border-color); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; text-align: left;">
+                            <div class="results-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="font-size: 1rem; font-weight: 600; margin: 0;" id="sql-results-title">Sorgu Çıktısı</h4>
+                                <button type="button" class="btn btn-success btn-sm hidden" id="btn-sql-export" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem;">
+                                    <i class="fa-solid fa-file-csv"></i> Sonuçları CSV İndir
+                                </button>
+                            </div>
+
+                            <div class="output-panel" id="sql-output-panel" style="width: 100%; min-height: 120px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; overflow: auto; max-height: 420px; padding: 15px;">
+                                <span class="text-secondary text-sm">Sorgunuzu yazıp 'Çalıştır' butonuna basın. Sonuçlar burada tablo şeklinde listelenecektir.</span>
+                            </div>
                         </div>
                     </div>
                 </section>
