@@ -46,6 +46,7 @@ const state = {
     },
     selectedRowIds: [], // Store selected row IDs for bulk actions
     exportFormat: null, // Store active export format during column selection
+    sqlResult: null, // Store active SQL execution results
     // Temp data during file upload
     uploadData: {
         file_key: null,
@@ -70,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTableCreatorEvents();
     initRelationsEvents();
     initDatabaseBackupRestoreEvents();
+    initSqlConsoleEvents();
 
     // Load initial data
     loadDashboardData();
@@ -133,7 +135,7 @@ function initNavigation() {
     // Handle initial hash routing
     if (window.location.hash) {
         const hash = window.location.hash.substring(1);
-        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory'];
+        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory', 'sql-console'];
         if (validTabs.includes(hash)) {
             switchTab(hash);
         }
@@ -188,6 +190,10 @@ function switchTab(tabId) {
         pageTitle.textContent = 'Envanter ve Cihaz Analiz Paneli';
         pageSubtitle.textContent = 'Sarf malzemelerinizi ve cihaz durumlarınızı grafiksel olarak inceleyin';
         loadInventoryTab();
+    } else if (tabId === 'sql-console') {
+        pageTitle.textContent = 'SQL Sorgu Konsolu';
+        pageSubtitle.textContent = 'Veritabanı üzerinde serbestçe SQL sorguları çalıştırıp raporlar indirin';
+        loadSqlConsoleTab();
     }
 }
 
@@ -354,7 +360,7 @@ function initDatabaseBackupRestoreEvents() {
             // Reload all dashboard and application data
             loadDashboardData();
             loadTablesList();
-            
+
             // If there's an active table selected, reset view
             state.activeTable = null;
             const tableEmptyView = document.getElementById('table-viewer-empty');
@@ -2554,15 +2560,15 @@ async function loadInventoryTab() {
                     const col = th.getAttribute('data-sort');
                     const currentOrder = state.inventoryState.filters.sortOrder;
                     const currentCol = state.inventoryState.filters.sortCol;
-                    
+
                     let newOrder = 'asc';
                     if (currentCol === col) {
                         newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
                     }
-                    
+
                     state.inventoryState.filters.sortCol = col;
                     state.inventoryState.filters.sortOrder = newOrder;
-                    
+
                     // Update header icons
                     headersRow.querySelectorAll('th[data-sort] i').forEach(icon => {
                         icon.className = 'fa-solid fa-sort text-muted ms-1';
@@ -2571,7 +2577,7 @@ async function loadInventoryTab() {
                     if (activeIcon) {
                         activeIcon.className = `fa-solid fa-sort-${newOrder === 'asc' ? 'up' : 'down'} ms-1`;
                     }
-                    
+
                     renderInventoryDevicesTable();
                 });
             });
@@ -2592,13 +2598,13 @@ async function loadInventoryTableData(tableName) {
         sortCol: 'id',
         sortOrder: 'asc'
     };
-    
+
     const detSearchInput = document.getElementById('inv-details-search');
     if (detSearchInput) detSearchInput.value = '';
-    
+
     const detQtyInput = document.getElementById('inv-details-qty-filter');
     if (detQtyInput) detQtyInput.value = '';
-    
+
     // Reset header icons
     const headersRow = document.getElementById('inv-details-headers');
     if (headersRow) {
@@ -3101,7 +3107,7 @@ function renderInventoryDevicesTable() {
     // 4. Apply Header Column Sorting
     const sortCol = state.inventoryState.filters.sortCol || 'id';
     const sortOrder = state.inventoryState.filters.sortOrder || 'asc';
-    
+
     filteredRows.sort((a, b) => {
         let valA, valB;
         if (sortCol === 'id') {
@@ -3115,14 +3121,14 @@ function renderInventoryDevicesTable() {
             valA = colName ? String(a[colName] || '').trim() : '';
             valB = colName ? String(b[colName] || '').trim() : '';
         }
-        
+
         let compareResult = 0;
         if (typeof valA === 'number' && typeof valB === 'number') {
             compareResult = valA - valB;
         } else {
             compareResult = String(valA).localeCompare(String(valB), 'tr');
         }
-        
+
         return sortOrder === 'asc' ? compareResult : -compareResult;
     });
 
@@ -3235,5 +3241,194 @@ window.loadInventoryTableData = loadInventoryTableData;
 window.calculateAndRenderInventory = calculateAndRenderInventory;
 window.openDeviceDetailModal = openDeviceDetailModal;
 window.closeDeviceDetailModal = closeDeviceDetailModal;
+
+// ==========================================================================
+// SQL QUERY CONSOLE IMPLEMENTATION
+// ==========================================================================
+function initSqlConsoleEvents() {
+    const btnRun = document.getElementById('btn-sql-run');
+    const btnClear = document.getElementById('btn-sql-clear');
+    const btnExport = document.getElementById('btn-sql-export');
+    const queryInput = document.getElementById('sql-query-input');
+
+    if (!btnRun) return;
+
+    if (btnRun.dataset.consoleListenerBound) return;
+    btnRun.dataset.consoleListenerBound = 'true';
+
+    btnRun.addEventListener('click', () => {
+        runConsoleSql();
+    });
+
+    btnClear.addEventListener('click', () => {
+        if (queryInput) queryInput.value = '';
+        const outputPanel = document.getElementById('sql-output-panel');
+        if (outputPanel) {
+            outputPanel.innerHTML = '<span class="text-secondary text-sm">Sorgunuzu yazıp \'Çalıştır\' butonuna basın. Sonuçlar burada tablo şeklinde listelenecektir.</span>';
+        }
+        if (btnExport) btnExport.classList.add('hidden');
+        state.sqlResult = null;
+    });
+
+    if (btnExport) {
+        btnExport.addEventListener('click', () => {
+            exportSqlResultToCSV();
+        });
+    }
+
+    document.querySelectorAll('.btn-sample-query').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const query = e.target.getAttribute('data-query');
+            if (queryInput && query) {
+                queryInput.value = query;
+            }
+        });
+    });
+}
+
+function loadSqlConsoleTab() {
+    state.sqlResult = null;
+    const btnExport = document.getElementById('btn-sql-export');
+    if (btnExport) btnExport.classList.add('hidden');
+    const queryInput = document.getElementById('sql-query-input');
+    if (queryInput) {
+        queryInput.focus();
+    }
+}
+
+async function runConsoleSql() {
+    const queryInput = document.getElementById('sql-query-input');
+    const outputPanel = document.getElementById('sql-output-panel');
+    const btnExport = document.getElementById('btn-sql-export');
+
+    if (!queryInput || !outputPanel) return;
+
+    const query = queryInput.value.trim();
+    if (!query) {
+        showToast('Lütfen çalıştırılacak bir SQL sorgusu yazın.', 'error');
+        return;
+    }
+
+    showLoader('Sorgu çalıştırılıyor...');
+    outputPanel.innerHTML = '<div class="spinner"></div>';
+    if (btnExport) btnExport.classList.add('hidden');
+    state.sqlResult = null;
+
+    try {
+        const data = await apiCall('/api/sql/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query })
+        });
+
+        hideLoader();
+
+        if (data.is_select) {
+            state.sqlResult = {
+                columns: data.columns,
+                rows: data.rows
+            };
+
+            if (data.rows.length === 0) {
+                outputPanel.innerHTML = `
+                    <div style="width: 100%; text-align: center; padding: 20px;">
+                        <i class="fa-solid fa-circle-info text-indigo" style="font-size: 1.5rem; margin-bottom: 8px;"></i>
+                        <p class="text-secondary text-sm">Sorgu başarıyla çalıştırıldı, fakat dönen veri bulunmuyor (Boş sonuç kümesi).</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let tableHtml = `
+                <table class="custom-table" style="font-size: 0.85rem; width: 100%; min-width: 600px; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+            `;
+            data.columns.forEach(col => {
+                tableHtml += `<th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">${col}</th>`;
+            });
+            tableHtml += `
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.rows.forEach(row => {
+                tableHtml += `<tr>`;
+                data.columns.forEach(col => {
+                    const cellVal = row[col] !== null && row[col] !== undefined ? row[col] : '';
+                    tableHtml += `<td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${cellVal}</td>`;
+                });
+                tableHtml += `</tr>`;
+            });
+            tableHtml += `
+                    </tbody>
+                </table>
+            `;
+
+            outputPanel.style.display = 'block';
+            outputPanel.innerHTML = tableHtml;
+            if (btnExport) btnExport.classList.remove('hidden');
+            showToast(`Sorgu başarıyla çalıştırıldı. ${data.rows.length} satır listelendi.`);
+        } else {
+            outputPanel.style.display = 'flex';
+            outputPanel.innerHTML = `
+                <div style="width: 100%; text-align: center; padding: 20px;">
+                    <i class="fa-solid fa-circle-check text-green" style="font-size: 2rem; margin-bottom: 8px; color: var(--success);"></i>
+                    <h4 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">${data.message}</h4>
+                    <p class="text-secondary text-xs mt-2" style="margin-top: 4px;">Veritabanı güncellemeleri başarıyla işlendi (commit).</p>
+                </div>
+            `;
+            showToast(data.message);
+            loadDashboardData();
+            loadTablesList();
+        }
+    } catch (err) {
+        hideLoader();
+        outputPanel.style.display = 'flex';
+        outputPanel.innerHTML = `
+            <div style="width: 100%; text-align: left; padding: 15px; color: #f92672; font-family: 'Consolas', monospace; font-size: 0.9rem; line-height: 1.6; border: 1px solid rgba(249, 38, 114, 0.3); background: rgba(249, 38, 114, 0.05); border-radius: 6px;">
+                <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i> <strong>Veritabanı Hatası (SQLite Error):</strong>
+                <div style="margin-top: 8px; white-space: pre-wrap;">${err.message}</div>
+            </div>
+        `;
+    }
+}
+
+function exportSqlResultToCSV() {
+    if (!state.sqlResult || !state.sqlResult.rows || state.sqlResult.rows.length === 0) {
+        showToast('Dışa aktarılacak sorgu verisi bulunmuyor.', 'error');
+        return;
+    }
+
+    const cols = state.sqlResult.columns;
+    const rows = state.sqlResult.rows;
+
+    let csvRows = [];
+    csvRows.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','));
+    
+    rows.forEach(row => {
+        const rowVals = cols.map(col => {
+            const val = row[col] !== null && row[col] !== undefined ? row[col] : '';
+            return `"${String(val).replace(/"/g, '""')}"`;
+        });
+        csvRows.push(rowVals.join(','));
+    });
+
+    const csvContent = "\ufeff" + csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `sql_sorgu_sonucu_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Sorgu sonuçları CSV olarak indirildi.');
+}
+
+window.loadSqlConsoleTab = loadSqlConsoleTab;
+window.initSqlConsoleEvents = initSqlConsoleEvents;
+window.runConsoleSql = runConsoleSql;
+window.exportSqlResultToCSV = exportSqlResultToCSV;
 
 
