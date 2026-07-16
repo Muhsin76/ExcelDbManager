@@ -13,8 +13,6 @@
     <link rel="stylesheet" href="style.css">
     <!-- Chart.js for Premium Analytics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- jsPDF for Premium PDF Reports -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-theme">
     <!-- App Container -->
@@ -52,10 +50,6 @@
                 <a href="#inventory" class="nav-item" data-tab="inventory">
                     <i class="fa-solid fa-boxes-stacked"></i>
                     <span>Envanter Analizi</span>
-                </a>
-                <a href="#reports" class="nav-item" data-tab="reports">
-                    <i class="fa-solid fa-chart-column"></i>
-                    <span>Rapor & Grafik Oluşturucu</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
@@ -751,135 +745,6 @@
                             <i class="fa-solid fa-chart-line text-muted" style="font-size: 3rem; opacity: 0.3; margin-bottom: 16px;"></i>
                             <h4 class="text-muted">Analiz Yapmak İçin Tablo Seçin</h4>
                             <p class="text-muted text-sm" style="max-width: 500px; margin: 8px auto 0;">Yukarıdaki listeden sarf envanterinizi barındıran tabloyu seçtiğinizde grafikler ve cihaz listeleri otomatik olarak hazırlanacaktır.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 7. CUSTOM REPORTS VIEW -->
-                <section id="view-reports" class="tab-view">
-                    <div class="reports-layout">
-                        <!-- Left Panel: Configuration -->
-                        <div class="reports-sidebar card-glass">
-                            <h3><i class="fa-solid fa-sliders text-indigo"></i> Grafik Ayarları</h3>
-                            <p class="subtitle text-sm">Görselleştirmek istediğiniz veri parametrelerini belirleyin.</p>
-                            
-                            <form id="report-config-form" class="mt-4" onsubmit="return false;">
-                                <div class="form-group">
-                                    <label for="rep-select-table"><i class="fa-solid fa-table text-muted"></i> Tablo Seçin</label>
-                                    <select id="rep-select-table" class="form-control" required>
-                                        <option value="" disabled selected>Tablo Seçin...</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="rep-chart-type"><i class="fa-solid fa-chart-simple text-muted"></i> Grafik Türü</label>
-                                    <select id="rep-chart-type" class="form-control" required>
-                                        <option value="bar">Bar (Dikey Çubuk)</option>
-                                        <option value="line">Çizgi Grafiği</option>
-                                        <option value="pie">Pasta (Pie)</option>
-                                        <option value="doughnut">Halka (Doughnut)</option>
-                                        <option value="polarArea">Kutup Alanı (Polar Area)</option>
-                                        <option value="radar">Radar Grafik</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="rep-col-x"><i class="fa-solid fa-arrows-left-right text-muted"></i> X Ekseni (Gruplama Sütunu)</label>
-                                    <select id="rep-col-x" class="form-control" required disabled>
-                                        <option value="" disabled selected>Önce tablo seçin...</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="rep-action-y"><i class="fa-solid fa-calculator text-muted"></i> Y Ekseni Değeri</label>
-                                    <select id="rep-action-y" class="form-control" required disabled>
-                                        <option value="count" selected>Satır Sayısı (Record Count)</option>
-                                        <option value="sum">Değerlerin Toplamı (SUM)</option>
-                                        <option value="avg">Değerlerin Ortalaması (AVG)</option>
-                                        <option value="max">Maksimum Değer (MAX)</option>
-                                        <option value="min">Minimum Değer (MIN)</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group hidden" id="rep-col-y-wrapper">
-                                    <label for="rep-col-y"><i class="fa-solid fa-hashtag text-muted"></i> Y Ekseni Sütunu (Sayısal)</label>
-                                    <select id="rep-col-y" class="form-control">
-                                        <option value="" disabled selected>Önce tablo seçin...</option>
-                                    </select>
-                                </div>
-                                
-                                <button type="button" class="btn btn-primary w-full mt-4" id="btn-rep-generate" disabled>
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Grafiği ve Raporu Oluştur
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <!-- Right Panel: Visualizer & Data Summary -->
-                        <div class="reports-visualizer">
-                            <!-- Empty state for reports -->
-                            <div class="empty-state card-glass" id="rep-empty-state">
-                                <i class="fa-solid fa-chart-column empty-icon"></i>
-                                <h3>Grafik & Rapor Tasarımcısı</h3>
-                                <p>Sol taraftaki ayar panelinden bir tablo seçip X/Y ekseni parametrelerini belirleyerek analizlerinizi anlık olarak grafiklere dökebilir, PNG veya PDF raporları olarak indirebilirsiniz.</p>
-                            </div>
-                            
-                            <!-- Content Panel (Hidden initially) -->
-                            <div class="report-content-panel card-glass hidden" id="rep-content-panel">
-                                <div class="report-panel-header">
-                                    <div class="report-title-area">
-                                        <h2 id="active-report-title">Oluşturulan Grafik Raporu</h2>
-                                        <span class="badge" id="active-report-badge">Grafik Hazır</span>
-                                    </div>
-                                    <div class="report-action-buttons">
-                                        <button class="btn btn-primary btn-sm" id="btn-rep-export-png">
-                                            <i class="fa-solid fa-image"></i> Resim İndir (PNG)
-                                        </button>
-                                        <button class="btn btn-success btn-sm" id="btn-rep-export-pdf">
-                                            <i class="fa-solid fa-file-pdf"></i> PDF Rapor İndir
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Canvas Wrapper -->
-                                <div class="report-chart-container border-glass mt-4" style="position: relative; height: 350px; background: rgba(0,0,0,0.1); padding: 15px; display: flex; align-items: center; justify-content: center;">
-                                    <canvas id="report-chart" style="max-height: 100%; max-width: 100%;"></canvas>
-                                </div>
-                                
-                                <!-- Summary Metrics Grid -->
-                                <div class="stats-grid mt-4" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                                    <div class="stat-card" style="padding: 16px; text-align: left;">
-                                        <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Toplam Grup Sayısı</div>
-                                        <div class="stat-value" id="rep-stat-groups" style="font-size: 1.8rem; font-weight: 700; color: var(--accent-primary); margin-top: 4px;">0</div>
-                                    </div>
-                                    <div class="stat-card" style="padding: 16px; text-align: left;">
-                                        <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">İşlem Türü</div>
-                                        <div class="stat-value" id="rep-stat-op" style="font-size: 1.8rem; font-weight: 700; color: var(--success); margin-top: 4px;">COUNT</div>
-                                    </div>
-                                    <div class="stat-card" style="padding: 16px; text-align: left;">
-                                        <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Ortalama Grup Değeri</div>
-                                        <div class="stat-value" id="rep-stat-avg" style="font-size: 1.8rem; font-weight: 700; color: var(--warning); margin-top: 4px;">0</div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Detailed Aggregated Data Table -->
-                                <div class="reports-table-section mt-4">
-                                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px; text-align: left;"><i class="fa-solid fa-list-ol text-indigo"></i> Rapor Veri Tablosu</h3>
-                                    <div class="table-responsive border-glass">
-                                        <table class="custom-table" style="font-size: 0.85rem; width: 100%;">
-                                            <thead>
-                                                <tr>
-                                                    <th id="rep-th-x">X Ekseni Değeri</th>
-                                                    <th id="rep-th-y" style="text-align: right;">Hesaplanan Değer</th>
-                                                    <th style="width: 100px; text-align: center;">Yüzde (%)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="rep-table-tbody">
-                                                <!-- Populated dynamically -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </section>
