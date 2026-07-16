@@ -1737,6 +1737,70 @@ def delete_inventory_mapping(table_name):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# 18. Backup Database
+@app.route('/api/backup', methods=['GET'])
+def backup_database():
+    try:
+        # Check if database exists
+        if not os.path.exists(DB_PATH):
+            return jsonify({'success': False, 'error': 'Veritabanı dosyası bulunamadı.'}), 404
+        return send_file(
+            DB_PATH,
+            as_attachment=True,
+            download_name='excel_db_backup.db',
+            mimetype='application/x-sqlite3'
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 19. Restore Database
+@app.route('/api/restore', methods=['POST'])
+def restore_database():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'Yüklenecek dosya seçilmedi.'}), 400
+            
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'Yüklenecek dosya adı boş.'}), 400
+            
+        # We save it temporarily first to validate
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], 'restore_temp.db')
+        file.save(temp_path)
+        
+        # Validate that it is a valid SQLite3 file by checking the header
+        try:
+            with open(temp_path, 'rb') as f:
+                header = f.read(16)
+            if header != b'SQLite format 3\x00':
+                # Clean up and return error
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                return jsonify({'success': False, 'error': 'Geçersiz veritabanı dosyası. Dosya geçerli bir SQLite3 veritabanı olmalıdır.'}), 400
+        except Exception as ve:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return jsonify({'success': False, 'error': f'Dosya okunamadı veya doğrulanamadı: {str(ve)}'}), 400
+            
+        # SQLite database is valid!
+        # Now close all connections, remove DB_PATH, and copy the temp DB to DB_PATH
+        try:
+            import shutil
+            shutil.copy2(temp_path, DB_PATH)
+            # Remove temp file
+            os.remove(temp_path)
+            
+            # Re-initialize DB tables if some system tables are missing
+            init_db()
+            
+            return jsonify({'success': True, 'message': 'Veritabanı yedekten başarıyla geri yüklendi.'})
+        except Exception as oe:
+            return jsonify({'success': False, 'error': f'Veritabanı üzerine yazılamadı: {str(oe)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("DataBase Manager starting...")
     app.run(host='0.0.0.0', debug=True, port=5000)
+
