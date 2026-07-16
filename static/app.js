@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTableCreatorEvents();
     initRelationsEvents();
     initReportsEvents();
+    initDatabaseBackupRestoreEvents();
 
     // Load initial data
     loadDashboardData();
@@ -315,6 +316,77 @@ function viewSpecificTable(tableName) {
     setTimeout(() => {
         selectTable(tableName);
     }, 100);
+}
+
+// Database Backup and Restore
+function initDatabaseBackupRestoreEvents() {
+    const btnRestoreTrigger = document.getElementById('btn-db-restore-trigger');
+    const restoreFileInput = document.getElementById('db-restore-file-input');
+
+    if (!btnRestoreTrigger || !restoreFileInput) return;
+
+    btnRestoreTrigger.addEventListener('click', () => {
+        restoreFileInput.click();
+    });
+
+    restoreFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const resetInput = () => {
+            restoreFileInput.value = '';
+        };
+
+        const confirmMsg = "DİKKAT: Veritabanı yedeğini geri yüklemek, mevcut tüm verilerinizi, tablolarınızı ve ilişkilerinizi kalıcı olarak silecektir.\n\nDevam etmek istiyor musunuz?";
+        if (!confirm(confirmMsg)) {
+            resetInput();
+            return;
+        }
+
+        showLoader('Veritabanı geri yükleniyor, lütfen bekleyin...');
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/api/restore', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Veritabanı geri yüklenirken hata oluştu.');
+            }
+
+            hideLoader();
+            showToast('Veritabanı başarıyla geri yüklendi.');
+
+            // Reload all dashboard and application data
+            loadDashboardData();
+            loadTablesList();
+            
+            // If there's an active table selected, reset view
+            state.activeTable = null;
+            const tableEmptyView = document.getElementById('table-viewer-empty');
+            const tableContentView = document.getElementById('table-viewer-content');
+            if (tableEmptyView && tableContentView) {
+                tableEmptyView.classList.remove('hidden');
+                tableContentView.classList.add('hidden');
+            }
+
+            // Reload page to reinitialize everything with the new database state completely
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+
+        } catch (err) {
+            hideLoader();
+            showToast(err.message, 'error');
+        } finally {
+            resetInput();
+        }
+    });
 }
 
 // ==========================================================================
