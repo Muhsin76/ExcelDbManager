@@ -2271,7 +2271,7 @@ async function renderErDiagram() {
                 let badgeHtml = '';
                 if (isParentInRels) {
                     if (isLogicalParent) {
-                        badgeHtml = '<span class="diagram-badge badge-logical" title="Sanal İlişki">Sanal</span>';
+                        badgeHtml = '<span class="diagram-badge badge-logical" title="Sanal İlişki">PK</span>';
                     } else {
                         badgeHtml = '<span class="diagram-badge badge-pk" title="Birincil Anahtar">PK</span>';
                     }
@@ -2668,7 +2668,7 @@ function renderColumnsList(role, tableName, relations) {
         let badgesHtml = '';
         if (isParentInRels) {
             if (isLogicalParent) {
-                badgesHtml += ' <span class="badge-logical">Sanal</span>';
+                badgesHtml += ' <span class="badge-logical">PK</span>';
             } else {
                 badgesHtml += ' <span class="badge-pk">PK/UNI</span>';
             }
