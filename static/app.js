@@ -3853,7 +3853,20 @@ function renderInventoryDevicesTable() {
         const serVal = mapped.serial && row[mapped.serial] !== null ? String(row[mapped.serial]).trim() : '';
 
         const modelCell = modelVal ? `<span class="font-medium text-secondary">${modelVal}</span>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
-        const qtyCell = `<span class="font-semibold text-secondary">${qtyVal.toLocaleString()}</span>`;
+        
+        let qtyCell = '';
+        if (mapped.qty && mapped.qty !== 'row_count') {
+            qtyCell = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <button class="btn btn-secondary btn-xs btn-qty-dec" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">-</button>
+                    <span class="font-semibold text-secondary qty-val-display" style="min-width: 32px; display: inline-block; text-align: center;">${qtyVal.toLocaleString()}</span>
+                    <button class="btn btn-secondary btn-xs btn-qty-inc" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">+</button>
+                </div>
+            `;
+        } else {
+            qtyCell = `<span class="font-semibold text-secondary">${qtyVal.toLocaleString()}</span>`;
+        }
+
         const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
         const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
 
@@ -3861,7 +3874,7 @@ function renderInventoryDevicesTable() {
             <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
             <td class="font-medium" style="text-align: left;">${matVal}</td>
             <td class="font-medium" style="text-align: left;">${modelCell}</td>
-            <td style="text-align: right; width: 90px;">${qtyCell}</td>
+            <td style="text-align: center; width: 130px;">${qtyCell}</td>
             <td style="text-align: left; width: 180px;">${serCell}</td>
             <td style="text-align: left; width: 180px;">${macCell}</td>
             <td style="text-align: center; width: 100px;">
@@ -3876,8 +3889,107 @@ function renderInventoryDevicesTable() {
             openDeviceDetailModal(row);
         });
 
+        // Increment/Decrement event handlers
+        if (mapped.qty && mapped.qty !== 'row_count') {
+            const decBtn = tr.querySelector('.btn-qty-dec');
+            const incBtn = tr.querySelector('.btn-qty-inc');
+            const qtySpan = tr.querySelector('.qty-val-display');
+
+            decBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                let currentQty = parseFloat(row[mapped.qty]) || 0;
+                if (currentQty <= 0) return; // Prevent negative quantity
+
+                let newQty = currentQty - 1;
+                
+                try {
+                    const res = await apiCall(`/api/tables/${state.inventoryState.activeTable}/row/${row._rowid_}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [mapped.qty]: newQty })
+                    });
+                    if (res.success) {
+                        row[mapped.qty] = newQty;
+                        qtySpan.textContent = newQty.toLocaleString();
+                        calculateAndRenderInventorySilent();
+                    }
+                } catch (err) {
+                    console.error('Decrement qty error:', err);
+                }
+            });
+
+            incBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                let currentQty = parseFloat(row[mapped.qty]) || 0;
+                let newQty = currentQty + 1;
+
+                try {
+                    const res = await apiCall(`/api/tables/${state.inventoryState.activeTable}/row/${row._rowid_}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [mapped.qty]: newQty })
+                    });
+                    if (res.success) {
+                        row[mapped.qty] = newQty;
+                        qtySpan.textContent = newQty.toLocaleString();
+                        calculateAndRenderInventorySilent();
+                    }
+                } catch (err) {
+                    console.error('Increment qty error:', err);
+                }
+            });
+        }
+
         tbody.appendChild(tr);
     });
+}
+
+function calculateAndRenderInventorySilent() {
+    const rows = state.inventoryState.rows;
+    const mapped = state.inventoryState.mappedCols;
+
+    if (!mapped.material) return;
+
+    let totalQty = 0;
+    let macCount = 0;
+    let serialCount = 0;
+    const groups = {};
+
+    rows.forEach(row => {
+        const matVal = String(row[mapped.material] || 'Tanımlanmamış').trim();
+        let qty = 1;
+        if (mapped.qty !== 'row_count') {
+            const parsed = parseFloat(row[mapped.qty]);
+            qty = isNaN(parsed) ? 1 : parsed;
+        }
+        totalQty += qty;
+        groups[matVal] = (groups[matVal] || 0) + qty;
+        if (mapped.mac && row[mapped.mac] !== null && String(row[mapped.mac]).trim() !== '') {
+            macCount += qty;
+        }
+        if (mapped.serial && row[mapped.serial] !== null && String(row[mapped.serial]).trim() !== '') {
+            serialCount += qty;
+        }
+    });
+
+    const uniqueTypesCount = Object.keys(groups).length;
+    const macRatio = totalQty > 0 ? Math.round((macCount / totalQty) * 100) : 0;
+    const serialRatio = totalQty > 0 ? Math.round((serialCount / totalQty) * 100) : 0;
+
+    // Update stats cards
+    document.getElementById('inv-stat-total').textContent = totalQty.toLocaleString();
+    document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
+    document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
+    document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
+
+    const sortedGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+    state.inventoryState.filteredGroups = sortedGroups;
+
+    // Update distribution table
+    renderDistributionTable(sortedGroups, totalQty);
+
+    // Update Chart.js graph
+    renderInventoryChart(sortedGroups);
 }
 
 function openDeviceDetailModal(row) {
