@@ -16,6 +16,8 @@ const state = {
         },
         selectedMaterial: null,
         chartInstance: null,
+        dirtyQty: {},
+        originalQty: {},
         filters: {
             search: '',
             qtyFilterStr: '',
@@ -415,11 +417,16 @@ async function loadTablesList(selectTableName = null) {
             listContainer.appendChild(li);
         });
 
-        // Auto-select table if requested, or if activeTable is still set, or do not select
+        // Auto-select table if requested, or if activeTable is still set, or from localStorage
+        const savedExplorerTable = localStorage.getItem('last_selected_tables_explorer_table');
         if (selectTableName) {
             selectTable(selectTableName);
         } else if (state.activeTable && state.tables.some(t => t.name === state.activeTable)) {
             selectTable(state.activeTable);
+        } else if (savedExplorerTable && state.tables.some(t => t.name === savedExplorerTable)) {
+            selectTable(savedExplorerTable);
+        } else if (state.tables.length > 0) {
+            selectTable(state.tables[0].name);
         }
     } catch (err) {
         console.error('Tables list load error:', err);
@@ -428,6 +435,7 @@ async function loadTablesList(selectTableName = null) {
 
 function selectTable(tableName) {
     state.activeTable = tableName;
+    localStorage.setItem('last_selected_tables_explorer_table', tableName);
 
     // Reset filters
     state.filters.page = 1;
@@ -3090,14 +3098,22 @@ async function loadInventoryTab() {
             select.appendChild(opt);
         });
 
-        // Auto-select first table matching inventory or devices keyword
+        // Load visible table from localStorage or auto-select matching keyword table
+        const savedInvTable = localStorage.getItem('last_selected_inventory_table');
         let autoSelectTable = "";
-        const keywords = ['sarf', 'envanter', 'inventory', 'device', 'cihaz', 'equipment', 'malzeme'];
-        for (const tObj of state.tables) {
-            const t = tObj.name;
-            if (keywords.some(k => t.toLowerCase().includes(k))) {
-                autoSelectTable = t;
-                break;
+        if (savedInvTable && state.tables.some(t => t.name === savedInvTable)) {
+            autoSelectTable = savedInvTable;
+        } else {
+            const keywords = ['sarf', 'envanter', 'inventory', 'device', 'cihaz', 'equipment', 'malzeme'];
+            for (const tObj of state.tables) {
+                const t = tObj.name;
+                if (keywords.some(k => t.toLowerCase().includes(k))) {
+                    autoSelectTable = t;
+                    break;
+                }
+            }
+            if (!autoSelectTable && state.tables.length > 0) {
+                autoSelectTable = state.tables[0].name;
             }
         }
 
@@ -3114,6 +3130,7 @@ async function loadInventoryTab() {
         select.dataset.listenerBound = 'true';
 
         select.addEventListener('change', (e) => {
+            localStorage.setItem('last_selected_inventory_table', e.target.value);
             loadInventoryTableData(e.target.value);
         });
 
@@ -3283,6 +3300,67 @@ async function loadInventoryTab() {
                 });
             });
         }
+
+        // Floating Quantity Save Bar Buttons
+        const btnSave = document.getElementById('btn-inv-qty-save');
+        if (btnSave) {
+            btnSave.addEventListener('click', async () => {
+                const dirty = state.inventoryState.dirtyQty;
+                const activeTable = state.inventoryState.activeTable;
+                const mappedQty = state.inventoryState.mappedCols.qty;
+
+                const keys = Object.keys(dirty);
+                if (keys.length === 0) return;
+
+                showLoader('Miktarlar kaydediliyor...');
+                try {
+                    await Promise.all(keys.map(rowid => 
+                        apiCall(`/api/tables/${activeTable}/row/${rowid}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ [mappedQty]: dirty[rowid] })
+                        })
+                    ));
+
+                    showToast('Miktarlar başarıyla kaydedildi.');
+                    state.inventoryState.dirtyQty = {};
+                    state.inventoryState.originalQty = {};
+                    
+                    const saveBar = document.getElementById('inv-qty-save-bar');
+                    if (saveBar) saveBar.classList.remove('active');
+                } catch (err) {
+                    console.error('Error saving bulk quantities:', err);
+                    showToast('Bazı miktarlar kaydedilirken hata oluştu.', 'error');
+                } finally {
+                    hideLoader();
+                }
+            });
+        }
+
+        const btnDiscard = document.getElementById('btn-inv-qty-discard');
+        if (btnDiscard) {
+            btnDiscard.addEventListener('click', () => {
+                const orig = state.inventoryState.originalQty;
+                const mappedQty = state.inventoryState.mappedCols.qty;
+
+                Object.entries(orig).forEach(([rowid, origQty]) => {
+                    const row = state.inventoryState.rows.find(r => String(r._rowid_) === rowid);
+                    if (row) {
+                        row[mappedQty] = origQty;
+                    }
+                });
+
+                state.inventoryState.dirtyQty = {};
+                state.inventoryState.originalQty = {};
+
+                const saveBar = document.getElementById('inv-qty-save-bar');
+                if (saveBar) saveBar.classList.remove('active');
+
+                renderInventoryDevicesTable();
+                calculateAndRenderInventorySilent();
+                showToast('Değişiklikler iptal edildi.');
+            });
+        }
     }
 }
 
@@ -3291,6 +3369,12 @@ async function loadInventoryTableData(tableName) {
     showLoader('Tablo analiz ediliyor...');
     state.inventoryState.activeTable = tableName;
     state.inventoryState.selectedMaterial = null;
+
+    // Reset dirty tracking
+    state.inventoryState.dirtyQty = {};
+    state.inventoryState.originalQty = {};
+    const saveBar = document.getElementById('inv-qty-save-bar');
+    if (saveBar) saveBar.classList.remove('active');
 
     // Reset filters
     state.inventoryState.filters = {
@@ -3895,48 +3979,44 @@ function renderInventoryDevicesTable() {
             const incBtn = tr.querySelector('.btn-qty-inc');
             const qtySpan = tr.querySelector('.qty-val-display');
 
-            decBtn.addEventListener('click', async (e) => {
+            decBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const rowid = row._rowid_;
+                const origQtyKey = rowid;
+
+                if (state.inventoryState.originalQty[origQtyKey] === undefined) {
+                    state.inventoryState.originalQty[origQtyKey] = parseFloat(row[mapped.qty]) || 0;
+                }
+
                 let currentQty = parseFloat(row[mapped.qty]) || 0;
-                if (currentQty <= 0) return; // Prevent negative quantity
+                if (currentQty <= 0) return;
 
                 let newQty = currentQty - 1;
-                
-                try {
-                    const res = await apiCall(`/api/tables/${state.inventoryState.activeTable}/row/${row._rowid_}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ [mapped.qty]: newQty })
-                    });
-                    if (res.success) {
-                        row[mapped.qty] = newQty;
-                        qtySpan.textContent = newQty.toLocaleString();
-                        calculateAndRenderInventorySilent();
-                    }
-                } catch (err) {
-                    console.error('Decrement qty error:', err);
-                }
+                row[mapped.qty] = newQty;
+                state.inventoryState.dirtyQty[rowid] = newQty;
+
+                qtySpan.textContent = newQty.toLocaleString();
+                calculateAndRenderInventorySilent();
+                updateInventorySaveBarState();
             });
 
-            incBtn.addEventListener('click', async (e) => {
+            incBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const rowid = row._rowid_;
+                const origQtyKey = rowid;
+
+                if (state.inventoryState.originalQty[origQtyKey] === undefined) {
+                    state.inventoryState.originalQty[origQtyKey] = parseFloat(row[mapped.qty]) || 0;
+                }
+
                 let currentQty = parseFloat(row[mapped.qty]) || 0;
                 let newQty = currentQty + 1;
+                row[mapped.qty] = newQty;
+                state.inventoryState.dirtyQty[rowid] = newQty;
 
-                try {
-                    const res = await apiCall(`/api/tables/${state.inventoryState.activeTable}/row/${row._rowid_}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ [mapped.qty]: newQty })
-                    });
-                    if (res.success) {
-                        row[mapped.qty] = newQty;
-                        qtySpan.textContent = newQty.toLocaleString();
-                        calculateAndRenderInventorySilent();
-                    }
-                } catch (err) {
-                    console.error('Increment qty error:', err);
-                }
+                qtySpan.textContent = newQty.toLocaleString();
+                calculateAndRenderInventorySilent();
+                updateInventorySaveBarState();
             });
         }
 
@@ -4243,5 +4323,26 @@ window.loadSqlConsoleTab = loadSqlConsoleTab;
 window.initSqlConsoleEvents = initSqlConsoleEvents;
 window.runConsoleSql = runConsoleSql;
 window.exportSqlResultToCSV = exportSqlResultToCSV;
+
+function updateInventorySaveBarState() {
+    const dirty = state.inventoryState.dirtyQty;
+    const origMap = state.inventoryState.originalQty;
+    const saveBar = document.getElementById('inv-qty-save-bar');
+    if (!saveBar) return;
+
+    // Clean keys that match original values
+    Object.keys(dirty).forEach(rowid => {
+        if (dirty[rowid] === origMap[rowid]) {
+            delete dirty[rowid];
+            delete origMap[rowid];
+        }
+    });
+
+    if (Object.keys(dirty).length > 0) {
+        saveBar.classList.add('active');
+    } else {
+        saveBar.classList.remove('active');
+    }
+}
 
 
