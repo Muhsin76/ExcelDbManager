@@ -2555,6 +2555,7 @@ async function saveDiagramRelation() {
     try {
         const res = await apiCall('/api/relations', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 parent_table: pTable,
                 parent_column: pCol,
