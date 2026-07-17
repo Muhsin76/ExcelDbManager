@@ -2236,16 +2236,179 @@ code {
     max-width: 960px;
 }
 
-@media (max-width: 992px) {
-    .inv-selectors-dropdowns-row {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
 @media (max-width: 576px) {
     .inv-selectors-dropdowns-row {
         grid-template-columns: 1fr;
     }
+}
+
+/* ==========================================================================
+   ER DIAGRAM VISUALIZER STYLES
+   ========================================================================== */
+.diagram-canvas-container {
+    position: relative;
+    width: 100%;
+    height: 620px;
+    background-color: rgba(10, 15, 30, 0.4);
+    background-image: radial-gradient(var(--border-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    box-shadow: inset 0 2px 15px rgba(0, 0, 0, 0.4);
+}
+.diagram-canvas-container:active {
+    cursor: grabbing;
+}
+.light-theme .diagram-canvas-container {
+    background-color: rgba(255, 255, 255, 0.6);
+    background-image: radial-gradient(rgba(0,0,0,0.06) 1.5px, transparent 1.5px);
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+#diagram-zoom-wrapper {
+    transition: none; /* Instant reaction on zoom/pan drag */
+}
+#diagram-svg-overlay {
+    pointer-events: none;
+}
+.diagram-svg-path {
+    fill: none;
+    stroke-width: 2px;
+    transition: stroke-width 0.15s, filter 0.15s;
+}
+.diagram-svg-path.physical {
+    stroke: var(--accent-primary);
+}
+.diagram-svg-path.logical {
+    stroke: #f59e0b;
+    stroke-dasharray: 4 4;
+}
+.diagram-svg-path:hover,
+.diagram-svg-path.highlighted {
+    stroke-width: 3.5px;
+    filter: drop-shadow(0 0 4px var(--accent-glow));
+    cursor: pointer;
+}
+.diagram-svg-path.logical:hover,
+.diagram-svg-path.logical.highlighted {
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
+}
+
+.diagram-table-card {
+    position: absolute;
+    width: 240px;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    max-height: 280px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.diagram-table-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 16px var(--border-glow);
+}
+.diagram-table-card.dragging {
+    opacity: 0.9;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+.diagram-table-header {
+    background: rgba(99, 102, 241, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 12px;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+}
+.diagram-table-header .table-name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.diagram-table-header .row-count {
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+}
+.diagram-table-body {
+    overflow-y: auto;
+    flex-grow: 1;
+    padding: 4px 0;
+}
+.diagram-column-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.01);
+}
+.diagram-column-row:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+.diagram-column-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.diagram-column-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.diagram-column-type {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+.diagram-column-row .diagram-badge {
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.diagram-column-row .badge-pk {
+    background-color: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.diagram-column-row .badge-fk {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.diagram-column-row .badge-logical {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fde047;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.diagram-toolbar {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
 }
 
 

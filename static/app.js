@@ -1764,10 +1764,106 @@ const relationsState = {
     childTable: null,
     parentColumn: null,
     childColumn: null,
-    tablesData: {} // Cache table columns details
+    tablesData: {}, // Cache table columns details
+    activeView: 'builder', // 'builder' or 'diagram'
+    diagramZoom: 1.0,
+    diagramPanX: 0,
+    diagramPanY: 0,
+    diagramPositions: {},
+    activeRelations: []
 };
 
 function initRelationsEvents() {
+    // View Toggles
+    const btnToggleBuilder = document.getElementById('btn-toggle-rel-builder');
+    const btnToggleDiagram = document.getElementById('btn-toggle-rel-diagram');
+    const builderContainer = document.getElementById('relations-builder-container');
+    const diagramContainer = document.getElementById('relations-diagram-container');
+
+    if (btnToggleBuilder && btnToggleDiagram) {
+        btnToggleBuilder.addEventListener('click', () => {
+            relationsState.activeView = 'builder';
+            btnToggleBuilder.className = 'btn btn-primary';
+            btnToggleDiagram.className = 'btn btn-secondary';
+            builderContainer.classList.remove('hidden');
+            diagramContainer.classList.add('hidden');
+        });
+
+        btnToggleDiagram.addEventListener('click', () => {
+            relationsState.activeView = 'diagram';
+            btnToggleBuilder.className = 'btn btn-secondary';
+            btnToggleDiagram.className = 'btn btn-primary';
+            builderContainer.classList.add('hidden');
+            diagramContainer.classList.remove('hidden');
+            renderErDiagram();
+        });
+    }
+
+    // Diagram Toolbar Actions
+    const btnZoomIn = document.getElementById('btn-diagram-zoom-in');
+    if (btnZoomIn) {
+        btnZoomIn.addEventListener('click', () => adjustDiagramZoom(0.1));
+    }
+    const btnZoomOut = document.getElementById('btn-diagram-zoom-out');
+    if (btnZoomOut) {
+        btnZoomOut.addEventListener('click', () => adjustDiagramZoom(-0.1));
+    }
+    const btnReset = document.getElementById('btn-diagram-reset');
+    if (btnReset) {
+        btnReset.addEventListener('click', resetDiagramTransform);
+    }
+    const btnAutoLayout = document.getElementById('btn-diagram-auto-layout');
+    if (btnAutoLayout) {
+        btnAutoLayout.addEventListener('click', () => {
+            relationsState.diagramPositions = {};
+            localStorage.removeItem('er_diagram_positions');
+            renderErDiagram();
+        });
+    }
+
+    // Drag-to-Pan Canvas Events
+    const canvas = document.getElementById('diagram-canvas-container');
+    if (canvas) {
+        let isPanning = false;
+        let startX, startY;
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.target.id === 'diagram-canvas-container' || 
+                e.target.id === 'diagram-zoom-wrapper' || 
+                e.target.id === 'diagram-svg-overlay' || 
+                e.target.id === 'diagram-tables-wrapper') {
+                isPanning = true;
+                canvas.style.cursor = 'grabbing';
+                startX = e.clientX - relationsState.diagramPanX;
+                startY = e.clientY - relationsState.diagramPanY;
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            relationsState.diagramPanX = e.clientX - startX;
+            relationsState.diagramPanY = e.clientY - startY;
+            updateDiagramTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isPanning) {
+                isPanning = false;
+                canvas.style.cursor = 'grab';
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = 0.05;
+            if (e.deltaY < 0) {
+                adjustDiagramZoom(zoomFactor);
+            } else {
+                adjustDiagramZoom(-zoomFactor);
+            }
+        });
+    }
+
     // Dropdown selections
     document.getElementById('relation-table-a').addEventListener('change', (e) => {
         selectRelationTable('a', e.target.value);
@@ -1874,10 +1970,319 @@ async function loadRelationsData() {
         const relsRes = await apiCall('/api/relations');
         renderRelationsList(relsRes.relations);
 
+        // If diagram view is active, refresh the diagram
+        if (relationsState.activeView === 'diagram') {
+            renderErDiagram();
+        }
+
     } catch (err) {
         console.error('Relations loading error:', err);
     } finally {
         hideLoader();
+    }
+}
+
+// ==========================================================================
+// ER DIAGRAM RENDER & EVENT HANDLERS
+// ==========================================================================
+async function renderErDiagram() {
+    const tablesWrapper = document.getElementById('diagram-tables-wrapper');
+    const svgOverlay = document.getElementById('diagram-svg-overlay');
+    if (!tablesWrapper || !svgOverlay) return;
+
+    tablesWrapper.innerHTML = '';
+    // Clear old paths, preserving markers
+    const paths = svgOverlay.querySelectorAll('.diagram-svg-path');
+    paths.forEach(p => p.remove());
+
+    showLoader('ER Şeması yükleniyor...');
+    try {
+        // Fetch relations list
+        const relsRes = await apiCall('/api/relations');
+        const relations = relsRes.relations;
+        relationsState.activeRelations = relations;
+
+        // Fetch tables list
+        const tablesRes = await apiCall('/api/tables');
+        const tables = tablesRes.tables;
+
+        // Cache table structure for columns details
+        tables.forEach(t => {
+            relationsState.tablesData[t.name] = {
+                columns: t.columns.map(c => c.name),
+                column_types: t.columns.reduce((acc, col) => {
+                    acc[col.name] = col.type;
+                    return acc;
+                }, {})
+            };
+        });
+
+        // Load positions from localStorage
+        const storedPositions = localStorage.getItem('er_diagram_positions');
+        if (storedPositions) {
+            try {
+                relationsState.diagramPositions = JSON.parse(storedPositions);
+            } catch (e) {
+                relationsState.diagramPositions = {};
+            }
+        }
+
+        // Apply grid layout for missing table positions
+        const colsCount = Math.ceil(Math.sqrt(tables.length)) || 1;
+        tables.forEach((table, index) => {
+            if (!relationsState.diagramPositions[table.name]) {
+                const col = index % colsCount;
+                const row = Math.floor(index / colsCount);
+                relationsState.diagramPositions[table.name] = {
+                    x: 60 + col * 320,
+                    y: 60 + row * 300
+                };
+            }
+        });
+
+        // Render Table Cards
+        tables.forEach(table => {
+            const card = document.createElement('div');
+            card.className = 'diagram-table-card';
+            card.id = `diagram-card-${table.name}`;
+            card.style.left = `${relationsState.diagramPositions[table.name].x}px`;
+            card.style.top = `${relationsState.diagramPositions[table.name].y}px`;
+
+            // Card Header
+            const header = document.createElement('div');
+            header.className = 'diagram-table-header';
+            header.innerHTML = `
+                <span class="table-name" title="${table.name}">
+                    <i class="fa-solid fa-table text-indigo"></i>
+                    <strong>${table.name}</strong>
+                </span>
+                <span class="row-count">${table.rowCount} satır</span>
+            `;
+            card.appendChild(header);
+
+            // Card Body (Columns)
+            const body = document.createElement('div');
+            body.className = 'diagram-table-body';
+
+            table.columns.forEach(col => {
+                const colName = col.name;
+                const colType = col.type || 'TEXT';
+
+                // Check key types for badges
+                const relAssociated = relations.find(r => r.parent_table === table.name && r.parent_column === colName);
+                const isParentInRels = !!relAssociated;
+                const isLogicalParent = relAssociated && relAssociated.is_logical;
+                const isChildInRels = relations.some(r => r.child_table === table.name && r.child_column === colName);
+
+                let badgeHtml = '';
+                if (isParentInRels) {
+                    if (isLogicalParent) {
+                        badgeHtml = '<span class="diagram-badge badge-logical" title="Sanal İlişki">Sanal</span>';
+                    } else {
+                        badgeHtml = '<span class="diagram-badge badge-pk" title="Birincil Anahtar">PK</span>';
+                    }
+                } else if (isChildInRels) {
+                    badgeHtml = '<span class="diagram-badge badge-fk" title="Yabancı Anahtar">FK</span>';
+                }
+
+                const colRow = document.createElement('div');
+                colRow.className = 'diagram-column-row';
+                colRow.setAttribute('data-column', colName);
+                colRow.innerHTML = `
+                    <span class="diagram-column-name-wrapper">
+                        <i class="fa-solid fa-columns text-muted text-xs"></i>
+                        <span class="diagram-column-name">${colName}</span>
+                        ${badgeHtml}
+                    </span>
+                    <span class="diagram-column-type">${colType}</span>
+                `;
+                body.appendChild(colRow);
+            });
+
+            card.appendChild(body);
+            tablesWrapper.appendChild(card);
+
+            // Setup card dragging
+            setupCardDrag(card, table.name);
+        });
+
+        // Draw connections
+        drawRelations(relations);
+
+        // Render zoom/pan view
+        updateDiagramTransform();
+
+    } catch (err) {
+        console.error('ER Diagram load error:', err);
+        showToast('ER Şeması yüklenirken bir hata oluştu.', 'error');
+    } finally {
+        hideLoader();
+    }
+}
+
+function setupCardDrag(card, tableName) {
+    const header = card.querySelector('.diagram-table-header');
+    let isDragging = false;
+    let startX, startY;
+    let cardStartX, cardStartY;
+
+    header.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        isDragging = true;
+        card.classList.add('dragging');
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        cardStartX = parseInt(card.style.left) || 0;
+        cardStartY = parseInt(card.style.top) || 0;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const dx = (e.clientX - startX) / relationsState.diagramZoom;
+        const dy = (e.clientY - startY) / relationsState.diagramZoom;
+
+        let newX = cardStartX + dx;
+        let newY = cardStartY + dy;
+
+        if (newX < 0) newX = 0;
+        if (newY < 0) newY = 0;
+
+        card.style.left = `${newX}px`;
+        card.style.top = `${newY}px`;
+
+        relationsState.diagramPositions[tableName] = { x: newX, y: newY };
+
+        // Redraw paths
+        drawRelations(relationsState.activeRelations || []);
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            card.classList.remove('dragging');
+            localStorage.setItem('er_diagram_positions', JSON.stringify(relationsState.diagramPositions));
+        }
+    });
+}
+
+function drawRelations(relations) {
+    const svgOverlay = document.getElementById('diagram-svg-overlay');
+    const zoomWrapper = document.getElementById('diagram-zoom-wrapper');
+    if (!svgOverlay || !zoomWrapper) return;
+
+    // Clear old lines
+    const oldPaths = svgOverlay.querySelectorAll('.diagram-svg-path');
+    oldPaths.forEach(p => p.remove());
+
+    relations.forEach((rel) => {
+        const parentCard = document.getElementById(`diagram-card-${rel.parent_table}`);
+        const childCard = document.getElementById(`diagram-card-${rel.child_table}`);
+
+        if (!parentCard || !childCard) return;
+
+        const parentRow = parentCard.querySelector(`.diagram-column-row[data-column="${rel.parent_column}"]`);
+        const childRow = childCard.querySelector(`.diagram-column-row[data-column="${rel.child_column}"]`);
+
+        if (!parentRow || !childRow) return;
+
+        const parentPos = getRelativeOffset(parentRow, zoomWrapper);
+        const childPos = getRelativeOffset(childRow, zoomWrapper);
+
+        const parentCardPos = getRelativeOffset(parentCard, zoomWrapper);
+        const childCardPos = getRelativeOffset(childCard, zoomWrapper);
+
+        const cardWidth = 240;
+        const rowHeight = parentRow.offsetHeight;
+
+        let x1, y1, x2, y2;
+
+        const parentLeft = parentCardPos.left;
+        const childLeft = childCardPos.left;
+
+        y1 = parentPos.top + rowHeight / 2;
+        y2 = childPos.top + rowHeight / 2;
+
+        if (parentLeft + cardWidth < childLeft) {
+            x1 = parentLeft + cardWidth;
+            x2 = childLeft;
+        } else if (childLeft + cardWidth < parentLeft) {
+            x1 = parentLeft;
+            x2 = childLeft + cardWidth;
+        } else {
+            if (parentLeft < childLeft) {
+                x1 = parentLeft + cardWidth;
+                x2 = childLeft;
+            } else {
+                x1 = parentLeft;
+                x2 = childLeft + cardWidth;
+            }
+        }
+
+        const deltaX = Math.abs(x2 - x1);
+        const cpOffset = Math.min(120, deltaX * 0.5);
+        const cp1x = x1 + (x2 > x1 ? cpOffset : -cpOffset);
+        const cp1y = y1;
+        const cp2x = x2 + (x2 > x1 ? -cpOffset : cpOffset);
+        const cp2y = y2;
+
+        const pathData = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathData);
+        path.setAttribute('class', `diagram-svg-path ${rel.is_logical ? 'logical' : 'physical'}`);
+        path.setAttribute('marker-end', `url(#arrow-${rel.is_logical ? 'logical' : 'physical'})`);
+        
+        const relTypeStr = rel.is_logical ? 'Sanal İlişki' : 'Fiziksel Yabancı Anahtar';
+        const actionStr = rel.is_logical ? '' : `\nON UPDATE: ${rel.on_update}\nON DELETE: ${rel.on_delete}`;
+        path.innerHTML = `<title>${relTypeStr}: ${rel.child_table}.${rel.child_column} ➔ ${rel.parent_table}.${rel.parent_column}${actionStr}</title>`;
+
+        path.addEventListener('mouseenter', () => {
+            path.classList.add('highlighted');
+            parentRow.style.background = 'rgba(99, 102, 241, 0.15)';
+            childRow.style.background = 'rgba(99, 102, 241, 0.15)';
+        });
+
+        path.addEventListener('mouseleave', () => {
+            path.classList.remove('highlighted');
+            parentRow.style.background = '';
+            childRow.style.background = '';
+        });
+
+        svgOverlay.appendChild(path);
+    });
+}
+
+function getRelativeOffset(element, targetParent) {
+    let top = 0;
+    let left = 0;
+    let curr = element;
+    while (curr && curr !== targetParent) {
+        top += curr.offsetTop;
+        left += curr.offsetLeft;
+        curr = curr.offsetParent;
+    }
+    return { top, left };
+}
+
+function adjustDiagramZoom(factor) {
+    const oldZoom = relationsState.diagramZoom;
+    relationsState.diagramZoom = Math.min(2.0, Math.max(0.5, oldZoom + factor));
+    updateDiagramTransform();
+}
+
+function resetDiagramTransform() {
+    relationsState.diagramZoom = 1.0;
+    relationsState.diagramPanX = 0;
+    relationsState.diagramPanY = 0;
+    updateDiagramTransform();
+}
+
+function updateDiagramTransform() {
+    const zoomWrapper = document.getElementById('diagram-zoom-wrapper');
+    if (zoomWrapper) {
+        zoomWrapper.style.transform = `translate(${relationsState.diagramPanX}px, ${relationsState.diagramPanY}px) scale(${relationsState.diagramZoom})`;
     }
 }
 

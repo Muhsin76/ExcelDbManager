@@ -473,7 +473,20 @@
                     <div class="relations-layout card-glass">
                         <h2>Tablo İlişkileri ve Yabancı Anahtarlar</h2>
                         <p class="subtitle">İki tabloyu seçip yan yana getirin, sütun başlıklarına tıklayarak otomatik silme ve güncelleme ilişkileri kurun.</p>
-                        <div class="relations-legend" style="display: flex; gap: 15px; font-size: 0.8rem; margin-top: 12px; margin-bottom: 4px; color: var(--text-secondary);">
+                        
+                        <!-- View Selector Tabs Toggle -->
+                        <div class="relations-view-selector mt-3 mb-4" style="display: flex; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+                            <button class="btn btn-primary" id="btn-toggle-rel-builder" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 500;">
+                                <i class="fa-solid fa-gears" style="margin-right: 6px;"></i>İlişki Tanımlayıcı
+                            </button>
+                            <button class="btn btn-secondary" id="btn-toggle-rel-diagram" style="padding: 8px 16px; font-size: 0.85rem; font-weight: 500;">
+                                <i class="fa-solid fa-diagram-project" style="margin-right: 6px;"></i>İlişki Şeması (ER Diagram)
+                            </button>
+                        </div>
+
+                        <!-- Relations Builder Container -->
+                        <div id="relations-builder-container">
+                            <div class="relations-legend" style="display: flex; gap: 15px; font-size: 0.8rem; margin-top: 12px; margin-bottom: 4px; color: var(--text-secondary);">
                             <span><span class="badge badge-pk" style="background-color: var(--accent-primary); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">PK/UNI</span> Birincil / Benzersiz Anahtar</span>
                             <span><span class="badge badge-fk" style="background-color: var(--success); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">FK</span> Yabancı (İlişkili) Anahtar</span>
                         </div>
@@ -582,6 +595,37 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                        </div> <!-- End #relations-builder-container -->
+
+                        <!-- Relations Diagram (ER Diagram) Container -->
+                        <div id="relations-diagram-container" class="hidden">
+                            <div class="diagram-toolbar mb-3" style="display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-in" title="Yakınlaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-out" title="Uzaklaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-reset" title="Sıfırla" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-arrows-to-eye"></i> Sıfırla / Odakla</button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-auto-layout" title="Yeniden Düzenle" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-sitemap"></i> Yeniden Düzenle</button>
+                                </div>
+                                <span class="text-secondary" style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-circle-info text-indigo"></i> Tabloları sürükleyerek yerlerini değiştirebilirsiniz. Sürüklemek için başlığı kullanın.</span>
+                            </div>
+                            <div class="diagram-canvas-container" id="diagram-canvas-container">
+                                <div id="diagram-zoom-wrapper" style="transform: translate(0px, 0px) scale(1); transform-origin: 0 0; width: 5000px; height: 5000px; position: absolute; top: 0; left: 0;">
+                                    <svg id="diagram-svg-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+                                        <defs>
+                                            <marker id="arrow-physical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent-primary)"/>
+                                            </marker>
+                                            <marker id="arrow-logical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+                                            </marker>
+                                        </defs>
+                                    </svg>
+                                    <div id="diagram-tables-wrapper" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: auto;">
+                                        <!-- HTML Table Cards will be appended here -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
