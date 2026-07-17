@@ -1770,7 +1770,9 @@ const relationsState = {
     diagramPanX: 0,
     diagramPanY: 0,
     diagramPositions: {},
-    activeRelations: []
+    activeRelations: [],
+    visibleTables: null,
+    tablesList: []
 };
 
 function initRelationsEvents() {
@@ -1821,13 +1823,39 @@ function initRelationsEvents() {
         });
     }
 
+    // Sidebar Visibility Actions
+    const btnSelectAll = document.getElementById('btn-diagram-select-all-tables');
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', () => {
+            const tables = relationsState.tablesList || [];
+            relationsState.visibleTables = tables.map(t => t.name);
+            localStorage.setItem('er_diagram_visible_tables', JSON.stringify(relationsState.visibleTables));
+            document.querySelectorAll('#diagram-tables-visibility-list input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updateDiagramVisibility();
+        });
+    }
+
+    const btnClear = document.getElementById('btn-diagram-clear-tables');
+    if (btnClear) {
+        btnClear.addEventListener('click', () => {
+            relationsState.visibleTables = [];
+            localStorage.setItem('er_diagram_visible_tables', JSON.stringify(relationsState.visibleTables));
+            document.querySelectorAll('#diagram-tables-visibility-list input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updateDiagramVisibility();
+        });
+    }
+
     // Drag-to-Pan Canvas Events
     const canvas = document.getElementById('diagram-canvas-container');
+    const zoomWrapper = document.getElementById('diagram-zoom-wrapper');
+    const svgOverlay = document.getElementById('diagram-svg-overlay');
+
     if (canvas) {
         let isPanning = false;
         let startX, startY;
 
         canvas.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.diagram-column-anchor')) return;
             if (e.target.id === 'diagram-canvas-container' || 
                 e.target.id === 'diagram-zoom-wrapper' || 
                 e.target.id === 'diagram-svg-overlay' || 
@@ -1863,6 +1891,124 @@ function initRelationsEvents() {
             }
         });
     }
+
+    // Drag-to-Connect Global Event Listeners
+    let activeDragSource = null;
+    let tempDragPath = null;
+
+    if (canvas && zoomWrapper && svgOverlay) {
+        canvas.addEventListener('mousedown', (e) => {
+            const anchor = e.target.closest('.diagram-column-anchor');
+            if (anchor) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const colRow = anchor.closest('.diagram-column-row');
+                const card = anchor.closest('.diagram-table-card');
+                if (!colRow || !card) return;
+
+                const tableName = card.id.replace('diagram-card-', '');
+                const columnName = colRow.getAttribute('data-column');
+
+                activeDragSource = {
+                    table: tableName,
+                    column: columnName,
+                    element: anchor
+                };
+
+                // Create temp drag path
+                tempDragPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                tempDragPath.setAttribute('id', 'temp-drag-path');
+                tempDragPath.setAttribute('class', 'diagram-svg-path logical');
+                tempDragPath.setAttribute('stroke', 'var(--accent-primary)');
+                tempDragPath.setAttribute('stroke-width', '2px');
+                tempDragPath.setAttribute('fill', 'none');
+                tempDragPath.setAttribute('marker-end', 'url(#arrow-logical)');
+                svgOverlay.appendChild(tempDragPath);
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!activeDragSource || !tempDragPath) return;
+
+            const rect = zoomWrapper.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) / relationsState.diagramZoom;
+            const mouseY = (e.clientY - rect.top) / relationsState.diagramZoom;
+
+            const anchorOffset = getRelativeOffset(activeDragSource.element, zoomWrapper);
+            const startX = anchorOffset.left + activeDragSource.element.offsetWidth / 2;
+            const startY = anchorOffset.top + activeDragSource.element.offsetHeight / 2;
+
+            const deltaX = Math.abs(mouseX - startX);
+            const cpOffset = Math.min(100, deltaX * 0.5);
+            const cp1x = startX + (mouseX > startX ? cpOffset : -cpOffset);
+            const cp1y = startY;
+            const cp2x = mouseX + (mouseX > startX ? -cpOffset : cpOffset);
+            const cp2y = mouseY;
+
+            const pathData = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${mouseX} ${mouseY}`;
+            tempDragPath.setAttribute('d', pathData);
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (!activeDragSource) return;
+
+            if (tempDragPath) {
+                tempDragPath.remove();
+                tempDragPath = null;
+            }
+
+            const targetElem = document.elementFromPoint(e.clientX, e.clientY);
+            const targetRow = targetElem ? targetElem.closest('.diagram-column-row') : null;
+            const targetCard = targetElem ? targetElem.closest('.diagram-table-card') : null;
+
+            if (targetRow && targetCard) {
+                const targetTable = targetCard.id.replace('diagram-card-', '');
+                const targetColumn = targetRow.getAttribute('data-column');
+
+                if (targetTable && targetColumn && targetTable !== activeDragSource.table) {
+                    openDiagramRelationModal(activeDragSource.table, activeDragSource.column, targetTable, targetColumn);
+                }
+            }
+
+            activeDragSource = null;
+        });
+    }
+
+    // Modal Interaction Binds
+    const btnModalSwap = document.getElementById('btn-modal-swap-direction');
+    if (btnModalSwap) {
+        btnModalSwap.addEventListener('click', () => {
+            const tempT = modalRelationData.parentTable;
+            const tempC = modalRelationData.parentColumn;
+            modalRelationData.parentTable = modalRelationData.childTable;
+            modalRelationData.parentColumn = modalRelationData.childColumn;
+            modalRelationData.childTable = tempT;
+            modalRelationData.childColumn = tempC;
+            updateModalRelationPreview();
+        });
+    }
+
+    const modalTypeSelect = document.getElementById('diagram-relation-type-select');
+    if (modalTypeSelect) {
+        modalTypeSelect.addEventListener('change', (e) => {
+            const actionGroups = document.querySelectorAll('.diagram-modal-on-actions');
+            if (e.target.value === 'logical') {
+                actionGroups.forEach(g => g.classList.add('hidden'));
+            } else {
+                actionGroups.forEach(g => g.classList.remove('hidden'));
+            }
+        });
+    }
+
+    const btnCloseModal = document.getElementById('btn-close-diagram-relation-modal');
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeDiagramRelationModal);
+
+    const btnCancelModal = document.getElementById('btn-cancel-diagram-relation');
+    if (btnCancelModal) btnCancelModal.addEventListener('click', closeDiagramRelationModal);
+
+    const btnConfirmModal = document.getElementById('btn-confirm-diagram-relation');
+    if (btnConfirmModal) btnConfirmModal.addEventListener('click', saveDiagramRelation);
 
     // Dropdown selections
     document.getElementById('relation-table-a').addEventListener('change', (e) => {
@@ -2005,6 +2151,7 @@ async function renderErDiagram() {
         // Fetch tables list
         const tablesRes = await apiCall('/api/tables');
         const tables = tablesRes.tables;
+        relationsState.tablesList = tables;
 
         // Cache table structure for columns details
         tables.forEach(t => {
@@ -2016,6 +2163,48 @@ async function renderErDiagram() {
                 }, {})
             };
         });
+
+        // Load visible tables from localStorage or default to showing all tables
+        if (!relationsState.visibleTables) {
+            const storedVisible = localStorage.getItem('er_diagram_visible_tables');
+            if (storedVisible) {
+                try {
+                    relationsState.visibleTables = JSON.parse(storedVisible);
+                } catch (e) {
+                    relationsState.visibleTables = tables.map(t => t.name);
+                }
+            } else {
+                relationsState.visibleTables = tables.map(t => t.name);
+            }
+        }
+
+        // Render visibility sidebar checkboxes list
+        const visibleList = document.getElementById('diagram-tables-visibility-list');
+        if (visibleList) {
+            visibleList.innerHTML = '';
+            tables.forEach(table => {
+                const item = document.createElement('label');
+                item.className = 'diagram-sidebar-item';
+                const isChecked = relationsState.visibleTables.includes(table.name);
+                item.innerHTML = `
+                    <input type="checkbox" data-table="${table.name}" ${isChecked ? 'checked' : ''}>
+                    <span>${table.name}</span>
+                `;
+                item.querySelector('input').addEventListener('change', (e) => {
+                    const tName = e.target.getAttribute('data-table');
+                    if (e.target.checked) {
+                        if (!relationsState.visibleTables.includes(tName)) {
+                            relationsState.visibleTables.push(tName);
+                        }
+                    } else {
+                        relationsState.visibleTables = relationsState.visibleTables.filter(t => t !== tName);
+                    }
+                    localStorage.setItem('er_diagram_visible_tables', JSON.stringify(relationsState.visibleTables));
+                    updateDiagramVisibility();
+                });
+                visibleList.appendChild(item);
+            });
+        }
 
         // Load positions from localStorage
         const storedPositions = localStorage.getItem('er_diagram_positions');
@@ -2047,6 +2236,11 @@ async function renderErDiagram() {
             card.id = `diagram-card-${table.name}`;
             card.style.left = `${relationsState.diagramPositions[table.name].x}px`;
             card.style.top = `${relationsState.diagramPositions[table.name].y}px`;
+
+            // Apply visibility
+            if (!relationsState.visibleTables.includes(table.name)) {
+                card.classList.add('hidden');
+            }
 
             // Card Header
             const header = document.createElement('div');
@@ -2090,7 +2284,7 @@ async function renderErDiagram() {
                 colRow.setAttribute('data-column', colName);
                 colRow.innerHTML = `
                     <span class="diagram-column-name-wrapper">
-                        <i class="fa-solid fa-columns text-muted text-xs"></i>
+                        <i class="fa-solid fa-circle-dot diagram-column-anchor" title="İlişki kurmak için sürükleyin" style="cursor: crosshair; color: var(--text-muted); font-size: 0.65rem; transition: color 0.15s; margin-right: 4px;"></i>
                         <span class="diagram-column-name">${colName}</span>
                         ${badgeHtml}
                     </span>
@@ -2120,6 +2314,21 @@ async function renderErDiagram() {
     }
 }
 
+function updateDiagramVisibility() {
+    const tables = relationsState.tablesList || [];
+    tables.forEach(table => {
+        const card = document.getElementById(`diagram-card-${table.name}`);
+        if (card) {
+            if (relationsState.visibleTables.includes(table.name)) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        }
+    });
+    drawRelations(relationsState.activeRelations || []);
+}
+
 function setupCardDrag(card, tableName) {
     const header = card.querySelector('.diagram-table-header');
     let isDragging = false;
@@ -2127,6 +2336,8 @@ function setupCardDrag(card, tableName) {
     let cardStartX, cardStartY;
 
     header.addEventListener('mousedown', (e) => {
+        // Prevent pan handling when dragging table cards
+        if (e.target.closest('.diagram-column-anchor')) return;
         e.stopPropagation();
         isDragging = true;
         card.classList.add('dragging');
@@ -2177,6 +2388,11 @@ function drawRelations(relations) {
     oldPaths.forEach(p => p.remove());
 
     relations.forEach((rel) => {
+        // Only draw if both tables are visible!
+        if (relationsState.visibleTables && (!relationsState.visibleTables.includes(rel.parent_table) || !relationsState.visibleTables.includes(rel.child_table))) {
+            return;
+        }
+
         const parentCard = document.getElementById(`diagram-card-${rel.parent_table}`);
         const childCard = document.getElementById(`diagram-card-${rel.child_table}`);
 
@@ -2283,6 +2499,85 @@ function updateDiagramTransform() {
     const zoomWrapper = document.getElementById('diagram-zoom-wrapper');
     if (zoomWrapper) {
         zoomWrapper.style.transform = `translate(${relationsState.diagramPanX}px, ${relationsState.diagramPanY}px) scale(${relationsState.diagramZoom})`;
+    }
+}
+
+// ==========================================================================
+// RELATION CONFIGURATION MODAL FROM DIAGRAM DRAG-DROP
+// ==========================================================================
+let modalRelationData = {
+    parentTable: '',
+    parentColumn: '',
+    childTable: '',
+    childColumn: ''
+};
+
+function openDiagramRelationModal(pTable, pCol, cTable, cCol) {
+    modalRelationData = {
+        parentTable: pTable,
+        parentColumn: pCol,
+        childTable: cTable,
+        childColumn: cCol
+    };
+
+    updateModalRelationPreview();
+
+    // Default choices
+    document.getElementById('diagram-relation-type-select').value = 'logical';
+    const actionGroups = document.querySelectorAll('.diagram-modal-on-actions');
+    actionGroups.forEach(g => g.classList.add('hidden'));
+
+    // Show modal
+    const modal = document.getElementById('diagram-relation-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeDiagramRelationModal() {
+    const modal = document.getElementById('diagram-relation-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function updateModalRelationPreview() {
+    document.getElementById('modal-rel-parent-text').textContent = `${modalRelationData.parentTable}.${modalRelationData.parentColumn}`;
+    document.getElementById('modal-rel-child-text').textContent = `${modalRelationData.childTable}.${modalRelationData.childColumn}`;
+}
+
+async function saveDiagramRelation() {
+    const pTable = modalRelationData.parentTable;
+    const pCol = modalRelationData.parentColumn;
+    const cTable = modalRelationData.childTable;
+    const cCol = modalRelationData.childColumn;
+    const type = document.getElementById('diagram-relation-type-select').value;
+    const onUpdate = document.getElementById('diagram-relation-on-update').value;
+    const onDelete = document.getElementById('diagram-relation-on-delete').value;
+
+    showLoader('İlişki tanımlanıyor...');
+    try {
+        const res = await apiCall('/api/relations', {
+            method: 'POST',
+            body: JSON.stringify({
+                parent_table: pTable,
+                parent_column: pCol,
+                child_table: cTable,
+                child_column: cCol,
+                is_logical: type === 'logical',
+                on_update: onUpdate,
+                on_delete: onDelete
+            })
+        });
+
+        if (res.success) {
+            showToast(res.message || 'İlişki başarıyla kuruldu.');
+            closeDiagramRelationModal();
+            renderErDiagram();
+        } else {
+            showToast(res.error || 'İlişki kurulurken hata oluştu.', 'error');
+        }
+    } catch (err) {
+        console.error('Save relation error:', err);
+        showToast('İlişki kurulurken hata oluştu.', 'error');
+    } finally {
+        hideLoader();
     }
 }
 

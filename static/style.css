@@ -2411,4 +2411,53 @@ code {
     padding: 8px 12px;
 }
 
+.diagram-layout-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+    align-items: stretch;
+}
+@media (max-width: 992px) {
+    .diagram-layout-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.diagram-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+.diagram-sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+.diagram-sidebar-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+    width: 14px;
+    height: 14px;
+}
+.diagram-column-anchor {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    cursor: crosshair;
+    transition: color 0.15s, transform 0.15s;
+}
+.diagram-column-anchor:hover {
+    color: var(--accent-primary) !important;
+    transform: scale(1.3);
+}
+.relation-preview-box {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
 

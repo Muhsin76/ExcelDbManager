@@ -601,29 +601,48 @@
 
                         <!-- Relations Diagram (ER Diagram) Container -->
                         <div id="relations-diagram-container" class="hidden">
-                            <div class="diagram-toolbar mb-3" style="display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-in" title="Yakınlaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-out" title="Uzaklaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
-                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-reset" title="Sıfırla" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-arrows-to-eye"></i> Sıfırla / Odakla</button>
-                                    <button class="btn btn-secondary btn-sm" id="btn-diagram-auto-layout" title="Yeniden Düzenle" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-sitemap"></i> Yeniden Düzenle</button>
+                            <div class="diagram-layout-grid">
+                                <!-- Sidebar for Table Visibility List -->
+                                <div class="diagram-sidebar" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 620px; overflow-y: auto; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--border-color); border-radius: 12px;">
+                                    <h4 style="font-weight: 700; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 4px; color: var(--text-primary);">
+                                        <i class="fa-solid fa-list-check text-indigo"></i> Tablo Görünürlüğü
+                                    </h4>
+                                    <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                                        <button class="btn btn-secondary btn-xs" id="btn-diagram-select-all-tables" style="flex: 1; padding: 4px; font-size: 0.75rem;">Göster</button>
+                                        <button class="btn btn-secondary btn-xs" id="btn-diagram-clear-tables" style="flex: 1; padding: 4px; font-size: 0.75rem;">Gizle</button>
+                                    </div>
+                                    <div id="diagram-tables-visibility-list" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex-grow: 1;">
+                                        <!-- Dynamically filled with checkboxes -->
+                                    </div>
                                 </div>
-                                <span class="text-secondary" style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-circle-info text-indigo"></i> Tabloları sürükleyerek yerlerini değiştirebilirsiniz. Sürüklemek için başlığı kullanın.</span>
-                            </div>
-                            <div class="diagram-canvas-container" id="diagram-canvas-container">
-                                <div id="diagram-zoom-wrapper" style="transform: translate(0px, 0px) scale(1); transform-origin: 0 0; width: 5000px; height: 5000px; position: absolute; top: 0; left: 0;">
-                                    <svg id="diagram-svg-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
-                                        <defs>
-                                            <marker id="arrow-physical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                                <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent-primary)"/>
-                                            </marker>
-                                            <marker id="arrow-logical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                                <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
-                                            </marker>
-                                        </defs>
-                                    </svg>
-                                    <div id="diagram-tables-wrapper" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: auto;">
-                                        <!-- HTML Table Cards will be appended here -->
+                                
+                                <!-- Main canvas area -->
+                                <div class="diagram-main" style="display: flex; flex-direction: column; gap: 12px;">
+                                    <div class="diagram-toolbar" style="display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 2px;">
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-in" title="Yakınlaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                                            <button class="btn btn-secondary btn-sm" id="btn-diagram-zoom-out" title="Uzaklaştır" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                                            <button class="btn btn-secondary btn-sm" id="btn-diagram-reset" title="Sıfırla" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-arrows-to-eye"></i> Sıfırla / Odakla</button>
+                                            <button class="btn btn-secondary btn-sm" id="btn-diagram-auto-layout" title="Yeniden Düzenle" style="padding: 6px 12px; font-size: 0.85rem;"><i class="fa-solid fa-sitemap"></i> Yeniden Düzenle</button>
+                                        </div>
+                                        <span class="text-secondary" style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-circle-nodes text-indigo"></i> Sütun yanındaki <i class="fa-solid fa-circle-dot text-xs"></i> ikonunu tutup başka sütuna sürükleyin.</span>
+                                    </div>
+                                    <div class="diagram-canvas-container" id="diagram-canvas-container">
+                                        <div id="diagram-zoom-wrapper" style="transform: translate(0px, 0px) scale(1); transform-origin: 0 0; width: 5000px; height: 5000px; position: absolute; top: 0; left: 0;">
+                                            <svg id="diagram-svg-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+                                                <defs>
+                                                    <marker id="arrow-physical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent-primary)"/>
+                                                    </marker>
+                                                    <marker id="arrow-logical" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                        <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b"/>
+                                                    </marker>
+                                                </defs>
+                                            </svg>
+                                            <div id="diagram-tables-wrapper" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: auto;">
+                                                <!-- HTML Table Cards will be appended here -->
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -906,6 +925,60 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary w-full" id="btn-close-dev-modal-btn">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Relation Modal from ER Diagram -->
+    <div class="modal" id="diagram-relation-modal">
+        <div class="modal-content card-glass" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-link text-indigo"></i> İlişki Tanımla</h3>
+                <button class="btn-close-modal" id="btn-close-diagram-relation-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label style="font-weight: bold; font-size: 0.85rem;">Bağlantı Yönü:</label>
+                    <div class="relation-preview-box p-3 my-2" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="text-align: left;">
+                            <span class="badge badge-pk" id="modal-rel-parent-badge" style="background-color: var(--accent-primary); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">PARENT (PK)</span>
+                            <div id="modal-rel-parent-text" style="font-weight: 600; margin-top: 4px; font-size: 0.9rem; color: var(--text-primary);">Tablo.Sütun</div>
+                        </div>
+                        <button class="btn btn-secondary btn-xs" id="btn-modal-swap-direction" title="Yönü Tersine Çevir" style="padding: 4px 8px; font-size: 0.8rem;"><i class="fa-solid fa-right-left"></i></button>
+                        <div style="text-align: right;">
+                            <span class="badge badge-fk" id="modal-rel-child-badge" style="background-color: var(--success); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">CHILD (FK)</span>
+                            <div id="modal-rel-child-text" style="font-weight: 600; margin-top: 4px; font-size: 0.9rem; color: var(--text-primary);">Tablo.Sütun</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label for="diagram-relation-type-select"><i class="fa-solid fa-gears text-indigo"></i> İlişki Tipi:</label>
+                    <select id="diagram-relation-type-select" class="form-control">
+                        <option value="logical" selected>Sanal İlişki (Veri Uyuşmazlığı Varsa Da Çalışır - Filtreleme İçin)</option>
+                        <option value="physical">Fiziksel SQL İlişkisi (Kesin Bütünlük Zorunlu)</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3 diagram-modal-on-actions hidden">
+                    <label for="diagram-relation-on-update">Güncelleme Eylemi (ON UPDATE):</label>
+                    <select id="diagram-relation-on-update" class="form-control form-control-sm">
+                        <option value="CASCADE" selected>Değişikliği Otomatik Yay (CASCADE)</option>
+                        <option value="SET NULL">Boş Bırak (SET NULL)</option>
+                        <option value="RESTRICT">Güncellemeyi Engelle (RESTRICT)</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3 diagram-modal-on-actions hidden">
+                    <label for="diagram-relation-on-delete">Silme Eylemi (ON DELETE):</label>
+                    <select id="diagram-relation-on-delete" class="form-control form-control-sm">
+                        <option value="CASCADE" selected>İlişkili Satırları Otomatik Sil (CASCADE)</option>
+                        <option value="SET NULL">Boş Bırak (SET NULL)</option>
+                        <option value="RESTRICT">Silmeyi Engelle (RESTRICT)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-diagram-relation">Vazgeç</button>
+                <button class="btn btn-primary" id="btn-confirm-diagram-relation">İlişkiyi Tanımla</button>
             </div>
         </div>
     </div>
