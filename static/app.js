@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDatabaseBackupRestoreEvents();
     initSqlConsoleEvents();
     initDiffMergeEvents();
+    initInPlaceTableUpdateEvents();
 
     // Load initial data
     loadDashboardData();
@@ -492,6 +493,7 @@ function selectTable(tableName) {
     fetchTableData();
     // Populate relation filters dropdown
     updateRelationFiltersDropdown();
+    checkTableSnapshotStatus(tableName);
 }
 
 async function fetchTableData() {
@@ -4742,6 +4744,317 @@ window.loadDiffMergeTab = loadDiffMergeTab;
 window.initDiffMergeEvents = initDiffMergeEvents;
 window.runDiffComparison = runDiffComparison;
 window.executeDiffMerge = executeDiffMerge;
+
+// ==========================================================================
+// IN-PLACE TABLE UPDATE & UNDO (SNAPSHOT / ROLLBACK) LOGIC
+// ==========================================================================
+
+async function checkTableSnapshotStatus(tableName) {
+    const btnRollback = document.getElementById('btn-rollback-table');
+    if (!btnRollback) return;
+
+    if (!tableName) {
+        btnRollback.classList.add('hidden');
+        return;
+    }
+
+    try {
+        const data = await apiCall(`/api/tables/${encodeURIComponent(tableName)}/snapshot/status`, { silentError: true });
+        if (data && data.has_backup) {
+            btnRollback.classList.remove('hidden');
+            btnRollback.setAttribute('title', `Geri Al: Tabloyu son güncelleme öncesindeki orijinal haline (${data.backup_row_count} satır) geri döndürün`);
+        } else {
+            btnRollback.classList.add('hidden');
+        }
+    } catch (err) {
+        btnRollback.classList.add('hidden');
+    }
+}
+
+let inPlaceUpdateFile = null;
+let inPlaceDiffResults = null;
+
+function initInPlaceTableUpdateEvents() {
+    const btnUpdateTable = document.getElementById('btn-update-table');
+    const btnRollbackTable = document.getElementById('btn-rollback-table');
+    const modalUpdate = document.getElementById('update-table-modal');
+    const btnCloseUpdate = document.getElementById('btn-close-update-modal');
+    const btnCancelUpdate = document.getElementById('btn-cancel-update');
+    
+    const fileDrop = document.getElementById('update-file-drop');
+    const fileInput = document.getElementById('update-file-input');
+    const fileName = document.getElementById('update-file-name');
+    const btnRunDiff = document.getElementById('btn-run-update-diff');
+    const btnApplyUpdate = document.getElementById('btn-confirm-apply-update');
+
+    if (btnUpdateTable) {
+        btnUpdateTable.addEventListener('click', () => {
+            if (!state.activeTable) {
+                showToast('Lütfen önce bir tablo seçin.', 'error');
+                return;
+            }
+            inPlaceUpdateFile = null;
+            inPlaceDiffResults = null;
+            if (fileName) fileName.textContent = 'Güncel Excel (.xlsx) veya CSV Dosyasını Sürükleyin';
+            if (fileInput) fileInput.value = '';
+            
+            const titleEl = document.getElementById('update-modal-table-title');
+            if (titleEl) titleEl.textContent = state.activeTable;
+
+            const diffResultsContainer = document.getElementById('update-diff-results');
+            if (diffResultsContainer) diffResultsContainer.classList.add('hidden');
+            if (btnApplyUpdate) btnApplyUpdate.classList.add('hidden');
+
+            if (modalUpdate) modalUpdate.classList.add('active');
+        });
+    }
+
+    if (btnCloseUpdate) btnCloseUpdate.addEventListener('click', () => modalUpdate.classList.remove('active'));
+    if (btnCancelUpdate) btnCancelUpdate.addEventListener('click', () => modalUpdate.classList.remove('active'));
+
+    if (fileDrop && fileInput) {
+        fileDrop.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                inPlaceUpdateFile = e.target.files[0];
+                if (fileName) fileName.textContent = `📁 ${inPlaceUpdateFile.name} (${(inPlaceUpdateFile.size / 1024).toFixed(1)} KB)`;
+            }
+        });
+
+        fileDrop.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileDrop.style.borderColor = 'var(--accent-primary)';
+            fileDrop.style.background = 'rgba(99, 102, 241, 0.1)';
+        });
+
+        fileDrop.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            fileDrop.style.borderColor = 'rgba(255,255,255,0.2)';
+            fileDrop.style.background = 'transparent';
+        });
+
+        fileDrop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileDrop.style.borderColor = 'rgba(255,255,255,0.2)';
+            fileDrop.style.background = 'transparent';
+
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                inPlaceUpdateFile = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files;
+                if (fileName) fileName.textContent = `📁 ${inPlaceUpdateFile.name} (${(inPlaceUpdateFile.size / 1024).toFixed(1)} KB)`;
+            }
+        });
+    }
+
+    if (btnRunDiff) {
+        btnRunDiff.addEventListener('click', async () => {
+            if (!state.activeTable) return;
+            if (!inPlaceUpdateFile) {
+                showToast('Lütfen güncel Excel veya CSV dosyasını yükleyin.', 'error');
+                return;
+            }
+
+            const keySelect = document.getElementById('update-key-column-select');
+            const selectedKey = keySelect ? keySelect.value : '';
+
+            const formData = new FormData();
+            formData.append('compare_type', 'db_file');
+            formData.append('table_a', state.activeTable);
+            formData.append('file_b', inPlaceUpdateFile);
+            formData.append('key_column', selectedKey);
+
+            showLoader('Mevcut tablo ile dosya karşılaştırılıyor...');
+
+            try {
+                const response = await fetch('/api/diff/compare', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                hideLoader();
+
+                if (!response.ok || !data.success) {
+                    showToast(data.error || 'Karşılaştırma hatası.', 'error');
+                    return;
+                }
+
+                inPlaceDiffResults = data;
+
+                if (keySelect && data.available_keys) {
+                    let opts = '';
+                    data.available_keys.forEach(k => {
+                        const isSel = k.toLowerCase() === data.key_column.toLowerCase() ? 'selected' : '';
+                        opts += `<option value="${k}" ${isSel}>🔑 ${k}</option>`;
+                    });
+                    keySelect.innerHTML = opts;
+                }
+
+                document.getElementById('update-stat-added').textContent = data.summary.added_count;
+                document.getElementById('update-stat-modified').textContent = data.summary.modified_count;
+                document.getElementById('update-stat-deleted').textContent = data.summary.deleted_count;
+                document.getElementById('update-stat-unchanged').textContent = data.summary.unchanged_count;
+
+                renderInPlaceDiffTable(data);
+
+                document.getElementById('update-diff-results').classList.remove('hidden');
+                if (btnApplyUpdate) btnApplyUpdate.classList.remove('hidden');
+
+                showToast(`Analiz tamamlandı: ${data.summary.added_count} Yeni, ${data.summary.modified_count} Değişen, ${data.summary.deleted_count} Silinen.`);
+
+            } catch (err) {
+                hideLoader();
+                showToast(err.message, 'error');
+            }
+        });
+    }
+
+    if (btnApplyUpdate) {
+        btnApplyUpdate.addEventListener('click', async () => {
+            if (!state.activeTable || !inPlaceDiffResults) return;
+
+            const res = inPlaceDiffResults;
+            showLoader('Veriler yedekleniyor ve güncelleme işleniyor...');
+
+            try {
+                const payload = {
+                    target_table: state.activeTable,
+                    key_column: res.key_column,
+                    apply_added: true,
+                    apply_modified: true,
+                    apply_deleted: true,
+                    added_rows: res.added_rows,
+                    modified_rows: res.modified_rows,
+                    deleted_rows: res.deleted_rows
+                };
+
+                const data = await apiCall('/api/diff/merge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                hideLoader();
+                if (modalUpdate) modalUpdate.classList.remove('active');
+
+                showToast(`'${state.activeTable}' tablosu güncellendi! Geri almak isterseniz 'Geri Al' butonunu kullanabilirsiniz.`);
+
+                selectTable(state.activeTable);
+                checkTableSnapshotStatus(state.activeTable);
+
+            } catch (err) {
+                hideLoader();
+                showToast(err.message, 'error');
+            }
+        });
+    }
+
+    if (btnRollbackTable) {
+        btnRollbackTable.addEventListener('click', async () => {
+            if (!state.activeTable) return;
+
+            const confirmMsg = `DİKKAT: "${state.activeTable}" tablosunu yapılan son güncellemeden önceki orijinal haline geri döndürmek istediğinize emin misiniz?`;
+            if (!confirm(confirmMsg)) return;
+
+            showLoader('Tablo orijinal haline geri döndürülüyor (Rollback)...');
+
+            try {
+                const data = await apiCall(`/api/tables/${encodeURIComponent(state.activeTable)}/rollback`, {
+                    method: 'POST'
+                });
+
+                hideLoader();
+                showToast(data.message);
+
+                selectTable(state.activeTable);
+                checkTableSnapshotStatus(state.activeTable);
+
+            } catch (err) {
+                hideLoader();
+                showToast(err.message, 'error');
+            }
+        });
+    }
+}
+
+function renderInPlaceDiffTable(res) {
+    const thead = document.getElementById('update-diff-thead');
+    const tbody = document.getElementById('update-diff-tbody');
+
+    if (!thead || !tbody || !res) return;
+
+    const cols = res.columns || [];
+    const keyCol = res.key_column;
+
+    let headerHtml = `<th style="width: 110px; text-align: center;">Durum</th>`;
+    cols.forEach(c => {
+        const isKey = c.toLowerCase() === keyCol.toLowerCase();
+        headerHtml += `<th>${isKey ? '<i class="fa-solid fa-key text-warning mr-1"></i>' : ''}${c}</th>`;
+    });
+    thead.innerHTML = headerHtml;
+
+    let rowsToRender = [];
+    res.added_rows.forEach(r => rowsToRender.push({ type: 'added', data: r }));
+    res.modified_rows.forEach(m => rowsToRender.push({ type: 'modified', data: m }));
+    res.deleted_rows.forEach(r => rowsToRender.push({ type: 'deleted', data: r }));
+
+    if (rowsToRender.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="text-center text-muted" style="padding: 20px;">Farklılık bulunamadı (Tablolar birebir aynı).</td></tr>`;
+        return;
+    }
+
+    let bodyHtml = '';
+    rowsToRender.forEach(item => {
+        if (item.type === 'added') {
+            bodyHtml += `<tr class="diff-row-added">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-success" style="font-size:0.7rem;">+ EKLENDİ</span></td>`;
+            cols.forEach(c => {
+                const val = item.data[c] !== undefined && item.data[c] !== null ? item.data[c] : '';
+                bodyHtml += `<td>${val}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        } else if (item.type === 'deleted') {
+            bodyHtml += `<tr class="diff-row-deleted">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-danger" style="font-size:0.7rem;">- SİLİNDİ</span></td>`;
+            cols.forEach(c => {
+                const val = item.data[c] !== undefined && item.data[c] !== null ? item.data[c] : '';
+                bodyHtml += `<td>${val}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        } else if (item.type === 'modified') {
+            const mod = item.data;
+            const changes = mod.changes || {};
+            const rowB = mod.row_b || {};
+            const rowA = mod.row_a || {};
+
+            bodyHtml += `<tr class="diff-row-modified">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-warning" style="font-size:0.7rem;">~ DEĞİŞTİ</span></td>`;
+            cols.forEach(c => {
+                if (changes[c]) {
+                    const oldV = changes[c].old || '(boş)';
+                    const newV = changes[c].new || '(boş)';
+                    bodyHtml += `
+                        <td class="diff-cell-changed" style="padding: 4px 8px !important;">
+                            <span class="diff-cell-badge old-val">${oldV}</span>
+                            ➔
+                            <span class="diff-cell-badge new-val">${newV}</span>
+                        </td>
+                    `;
+                } else {
+                    const val = rowB[c] !== undefined ? rowB[c] : (rowA[c] !== undefined ? rowA[c] : '');
+                    bodyHtml += `<td>${val}</td>`;
+                }
+            });
+            bodyHtml += `</tr>`;
+        }
+    });
+
+    tbody.innerHTML = bodyHtml;
+}
+
+window.checkTableSnapshotStatus = checkTableSnapshotStatus;
+window.initInPlaceTableUpdateEvents = initInPlaceTableUpdateEvents;
+
 
 
 

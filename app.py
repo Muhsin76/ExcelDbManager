@@ -2096,6 +2096,12 @@ def merge_diff():
             cursor.execute(f"PRAGMA table_info({target_table});")
             cols_info = cursor.fetchall()
             
+        # Auto snapshot before applying updates
+        if cols_info:
+            backup_table = f"_sys_backup_{target_table}"
+            cursor.execute(f"DROP TABLE IF EXISTS \"{backup_table}\";")
+            cursor.execute(f"CREATE TABLE \"{backup_table}\" AS SELECT * FROM \"{target_table}\";")
+            
         existing_cols = [c['name'] for c in cols_info]
         existing_cols_lower = {c.lower(): c for c in existing_cols}
         
@@ -2159,6 +2165,89 @@ def merge_diff():
             'deleted_count': deleted_cnt
         })
         
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- SNAPSHOT & ROLLBACK (UNDO) ENDPOINTS ---
+
+@app.route('/api/tables/<table_name>/snapshot/status', methods=['GET'])
+def get_snapshot_status(table_name):
+    try:
+        table_name = sanitize_name(table_name)
+        backup_table = f"_sys_backup_{table_name}"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (backup_table,))
+        exists = cursor.fetchone() is not None
+        
+        row_count = 0
+        if exists:
+            cursor.execute(f"SELECT COUNT(*) as count FROM \"{backup_table}\";")
+            row_count = cursor.fetchone()['count']
+            
+        conn.close()
+        return jsonify({
+            'success': True,
+            'table': table_name,
+            'has_backup': exists,
+            'backup_row_count': row_count
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/tables/<table_name>/snapshot', methods=['POST'])
+def create_table_snapshot(table_name):
+    try:
+        table_name = sanitize_name(table_name)
+        backup_table = f"_sys_backup_{table_name}"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'success': False, 'error': f"Tablo '{table_name}' bulunamadı."}), 404
+            
+        cursor.execute(f"DROP TABLE IF EXISTS \"{backup_table}\";")
+        cursor.execute(f"CREATE TABLE \"{backup_table}\" AS SELECT * FROM \"{table_name}\";")
+        
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': f"Tablo '{table_name}' için geri alma yedeği (snapshot) oluşturuldu.",
+            'backup_table': backup_table
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/tables/<table_name>/rollback', methods=['POST'])
+def rollback_table_snapshot(table_name):
+    try:
+        table_name = sanitize_name(table_name)
+        backup_table = f"_sys_backup_{table_name}"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (backup_table,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'success': False, 'error': f"'{table_name}' tablosu için geri alınacak bir yedek (snapshot) bulunamadı."}), 400
+            
+        cursor.execute(f"DROP TABLE IF EXISTS \"{table_name}\";")
+        cursor.execute(f"CREATE TABLE \"{table_name}\" AS SELECT * FROM \"{backup_table}\";")
+        cursor.execute(f"DROP TABLE \"{backup_table}\";")
+        
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': f"Tablo '{table_name}' güncellenmeden önceki orijinal haline başarıyla geri döndürüldü (Rollback)."
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
