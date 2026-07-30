@@ -4005,14 +4005,14 @@ function renderInventoryDevicesTable() {
         let qtyCell = '';
         if (mapped.qty && mapped.qty !== 'row_count') {
             qtyCell = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
                     <button class="btn btn-secondary btn-xs btn-qty-dec" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">-</button>
-                    <span class="font-semibold text-secondary qty-val-display" style="min-width: 32px; display: inline-block; text-align: center;">${qtyVal.toLocaleString()}</span>
+                    <span class="font-semibold text-secondary qty-val-display" style="min-width: 45px; display: inline-block; text-align: center; white-space: nowrap;">${qtyVal.toLocaleString()}</span>
                     <button class="btn btn-secondary btn-xs btn-qty-inc" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">+</button>
                 </div>
             `;
         } else {
-            qtyCell = `<span class="font-semibold text-secondary">${qtyVal.toLocaleString()}</span>`;
+            qtyCell = `<span class="font-semibold text-secondary" style="white-space: nowrap;">${qtyVal.toLocaleString()}</span>`;
         }
 
         // Price formatting
@@ -4022,25 +4022,25 @@ function renderInventoryDevicesTable() {
             const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
             const pVal = parseFloat(pClean);
             if (!isNaN(pVal)) {
-                unitPriceCell = `<span style="color: #10b981; font-weight: 600;">${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
-                totalPriceCell = `<span style="color: #10b981; font-weight: 700;">${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
+                unitPriceCell = `<span style="color: #10b981; font-weight: 600; white-space: nowrap;">${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
+                totalPriceCell = `<span style="color: #10b981; font-weight: 700; white-space: nowrap;">${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
             }
         }
 
-        const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
-        const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
+        const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem; white-space: nowrap;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş / Belirtilmemiş</span>';
+        const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem; white-space: nowrap;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş / Belirtilmemiş</span>';
 
         tr.innerHTML = `
-            <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
-            <td class="font-medium" style="text-align: left;">${matVal}</td>
-            <td class="font-medium" style="text-align: left;">${modelCell}</td>
-            <td style="text-align: center; width: 110px;">${qtyCell}</td>
-            <td style="text-align: right; width: 120px;">${unitPriceCell}</td>
-            <td style="text-align: right; width: 130px;">${totalPriceCell}</td>
-            <td style="text-align: left; width: 160px;">${serCell}</td>
-            <td style="text-align: left; width: 160px;">${macCell}</td>
-            <td style="text-align: center; width: 90px;">
-                <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 3px 6px;">
+            <td class="text-center font-semibold text-secondary" style="width: 50px; white-space: nowrap;">${row._rowid_ || (index + 1)}</td>
+            <td class="font-medium" style="text-align: left; white-space: nowrap;">${matVal}</td>
+            <td class="font-medium" style="text-align: left; white-space: nowrap;">${modelCell}</td>
+            <td style="text-align: center; min-width: 150px; white-space: nowrap;">${qtyCell}</td>
+            <td style="text-align: right; min-width: 120px; white-space: nowrap;">${unitPriceCell}</td>
+            <td style="text-align: right; min-width: 130px; white-space: nowrap;">${totalPriceCell}</td>
+            <td style="text-align: left; min-width: 140px; white-space: nowrap;">${serCell}</td>
+            <td style="text-align: left; min-width: 140px; white-space: nowrap;">${macCell}</td>
+            <td style="text-align: center; min-width: 130px; white-space: nowrap;">
+                <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 4px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
                     <i class="fa-solid fa-circle-info"></i> Detay
                 </button>
             </td>
