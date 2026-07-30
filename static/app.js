@@ -184,7 +184,7 @@ function switchTab(tabId) {
 
     if (tabId === 'dashboard') {
         pageTitle.textContent = 'Yönetim Paneli';
-        pageSubtitle.textContent = 'Veritabanı istatistikleri ve genel durum';
+        pageSubtitle.textContent = '';
         loadDashboardData();
     } else if (tabId === 'tables') {
         pageTitle.textContent = 'Tablolarım';
