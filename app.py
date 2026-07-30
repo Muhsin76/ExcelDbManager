@@ -1846,8 +1846,325 @@ def run_sql_query():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
+# --- DIFF & MERGE MODULE ---
+
+def read_file_rows(file_storage):
+    """
+    Reads an uploaded CSV or XLSX file and returns (headers, list of row dicts).
+    """
+    filename = file_storage.filename.lower()
+    rows = []
+    headers = []
+    
+    if filename.endswith('.csv'):
+        file_bytes = file_storage.read()
+        try:
+            text = file_bytes.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            text = file_bytes.decode('latin-1')
+            
+        first_line = text.split('\n')[0] if text else ''
+        delimiter = ';' if ';' in first_line else ','
+        
+        reader = csv.reader(text.splitlines(), delimiter=delimiter)
+        raw_rows = [row for row in reader if any(field.strip() for field in row)]
+        
+        if raw_rows:
+            raw_headers = raw_rows[0]
+            headers = make_unique_column_names(raw_headers)
+            for raw_row in raw_rows[1:]:
+                row_dict = {}
+                for idx, col_name in enumerate(headers):
+                    val = raw_row[idx].strip() if idx < len(raw_row) else ''
+                    row_dict[col_name] = val
+                rows.append(row_dict)
+                
+    elif filename.endswith(('.xlsx', '.xls')):
+        file_bytes = file_storage.read()
+        import io
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+        sheet = wb.active
+        
+        all_rows = list(sheet.iter_rows(values_only=True))
+        all_rows = [r for r in all_rows if r and any(cell is not None and str(cell).strip() != '' for cell in r)]
+        
+        if all_rows:
+            raw_headers = all_rows[0]
+            headers = make_unique_column_names(raw_headers)
+            for raw_row in all_rows[1:]:
+                row_dict = {}
+                for idx, col_name in enumerate(headers):
+                    val = raw_row[idx] if idx < len(raw_row) else None
+                    if val is None:
+                        val = ''
+                    else:
+                        val = str(val).strip()
+                    row_dict[col_name] = val
+                rows.append(row_dict)
+                
+    return headers, rows
+
+@app.route('/api/diff/compare', methods=['POST'])
+def compare_diff():
+    try:
+        compare_type = request.form.get('compare_type', 'files') # 'files' or 'db_file'
+        key_column = request.form.get('key_column', '').strip()
+        
+        headers_a, rows_a = [], []
+        headers_b, rows_b = [], []
+        
+        if compare_type == 'db_file':
+            table_a = sanitize_name(request.form.get('table_a', ''))
+            if not table_a:
+                return jsonify({'success': False, 'error': 'Veritabanı tablosu seçilmedi.'}), 400
+                
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"PRAGMA table_info({table_a});")
+            cols_info = cursor.fetchall()
+            headers_a = [c['name'] for c in cols_info]
+            
+            cursor.execute(f"SELECT * FROM {table_a};")
+            db_rows = cursor.fetchall()
+            conn.close()
+            
+            for r in db_rows:
+                r_dict = dict(r)
+                if '_rowid_' in r_dict:
+                    del r_dict['_rowid_']
+                str_dict = {k: (str(v) if v is not None else '') for k, v in r_dict.items()}
+                rows_a.append(str_dict)
+                
+            if 'file_b' not in request.files:
+                return jsonify({'success': False, 'error': 'Karşılaştırılacak yeni Excel/CSV dosyası yüklenmedi.'}), 400
+            file_b = request.files['file_b']
+            headers_b, rows_b = read_file_rows(file_b)
+            
+        else: # 'files'
+            if 'file_a' not in request.files or 'file_b' not in request.files:
+                return jsonify({'success': False, 'error': 'Lütfen karşılaştırılacak 2 adet dosya seçin.'}), 400
+            file_a = request.files['file_a']
+            file_b = request.files['file_b']
+            
+            headers_a, rows_a = read_file_rows(file_a)
+            headers_b, rows_b = read_file_rows(file_b)
+            
+        all_cols_a_lower = {c.lower(): c for c in headers_a}
+        all_cols_b_lower = {c.lower(): c for c in headers_b}
+        common_cols_lower = set(all_cols_a_lower.keys()).intersection(set(all_cols_b_lower.keys()))
+        
+        available_keys = [all_cols_b_lower[k] for k in common_cols_lower]
+        
+        if not available_keys:
+            return jsonify({'success': False, 'error': 'İki dosya/tablo arasında ortak sütun bulunamadı.'}), 400
+            
+        if not key_column or key_column.lower() not in common_cols_lower:
+            id_candidates = ['id', 'kod', 'code', 'no', 'tc', 'email', 'eposta', 'mac', 'serial', 'seri_no', 'siparis_no']
+            found_candidate = None
+            for cand in id_candidates:
+                for col in available_keys:
+                    if cand in col.lower():
+                        found_candidate = col
+                        break
+                if found_candidate:
+                    break
+            key_column = found_candidate or available_keys[0]
+            
+        key_col_a = all_cols_a_lower.get(key_column.lower(), key_column)
+        key_col_b = all_cols_b_lower.get(key_column.lower(), key_column)
+        
+        map_a = {}
+        for r in rows_a:
+            k_val = normalize_val(r.get(key_col_a, ''))
+            if k_val:
+                map_a[k_val] = r
+                
+        map_b = {}
+        for r in rows_b:
+            k_val = normalize_val(r.get(key_col_b, ''))
+            if k_val:
+                map_b[k_val] = r
+                
+        keys_a = set(map_a.keys())
+        keys_b = set(map_b.keys())
+        
+        added_keys = keys_b - keys_a
+        deleted_keys = keys_a - keys_b
+        common_keys = keys_a.intersection(keys_b)
+        
+        added_rows = [map_b[k] for k in added_keys]
+        deleted_rows = [map_a[k] for k in deleted_keys]
+        modified_rows = []
+        unchanged_count = 0
+        
+        for k in common_keys:
+            r_a = map_a[k]
+            r_b = map_b[k]
+            
+            changes = {}
+            for col_lower in common_cols_lower:
+                col_a_name = all_cols_a_lower[col_lower]
+                col_b_name = all_cols_b_lower[col_lower]
+                
+                val_a = normalize_val(r_a.get(col_a_name, ''))
+                val_b = normalize_val(r_b.get(col_b_name, ''))
+                
+                if val_a != val_b:
+                    changes[col_b_name] = {
+                        'old': r_a.get(col_a_name, ''),
+                        'new': r_b.get(col_b_name, '')
+                    }
+                    
+            if changes:
+                modified_rows.append({
+                    'key_value': k,
+                    'row_a': r_a,
+                    'row_b': r_b,
+                    'changes': changes
+                })
+            else:
+                unchanged_count += 1
+                
+        all_display_cols = list(headers_b)
+        for c in headers_a:
+            if c.lower() not in [x.lower() for x in all_display_cols]:
+                all_display_cols.append(c)
+                
+        return jsonify({
+            'success': True,
+            'compare_type': compare_type,
+            'key_column': key_column,
+            'available_keys': available_keys,
+            'columns': all_display_cols,
+            'summary': {
+                'total_a': len(rows_a),
+                'total_b': len(rows_b),
+                'added_count': len(added_rows),
+                'modified_count': len(modified_rows),
+                'deleted_count': len(deleted_rows),
+                'unchanged_count': unchanged_count
+            },
+            'added_rows': added_rows,
+            'deleted_rows': deleted_rows,
+            'modified_rows': modified_rows
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/diff/merge', methods=['POST'])
+def merge_diff():
+    try:
+        data = request.json or {}
+        target_table = sanitize_name(data.get('target_table', ''))
+        key_column = data.get('key_column', '').strip()
+        
+        apply_added = data.get('apply_added', True)
+        apply_modified = data.get('apply_modified', True)
+        apply_deleted = data.get('apply_deleted', False)
+        
+        added_rows = data.get('added_rows', [])
+        modified_rows = data.get('modified_rows', [])
+        deleted_rows = data.get('deleted_rows', [])
+        
+        if not target_table:
+            return jsonify({'success': False, 'error': 'Hedef veritabanı tablosu belirtilmedi.'}), 400
+        if not key_column:
+            return jsonify({'success': False, 'error': 'Eşleştirme anahtar sütunu belirtilmedi.'}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"PRAGMA table_info({target_table});")
+        cols_info = cursor.fetchall()
+        
+        if not cols_info:
+            sample_row = (added_rows[0] if added_rows else (modified_rows[0]['row_b'] if modified_rows else {}))
+            if not sample_row:
+                return jsonify({'success': False, 'error': 'Oluşturulacak tablo için veri yapısı bulunamadı.'}), 400
+                
+            col_defs = []
+            for col in sample_row.keys():
+                col_sanitized = sanitize_name(col)
+                if col.lower() == key_column.lower():
+                    col_defs.append(f'"{col_sanitized}" TEXT PRIMARY KEY')
+                else:
+                    col_defs.append(f'"{col_sanitized}" TEXT')
+                    
+            create_sql = f"CREATE TABLE IF NOT EXISTS {target_table} ({', '.join(col_defs)});"
+            cursor.execute(create_sql)
+            cursor.execute(f"PRAGMA table_info({target_table});")
+            cols_info = cursor.fetchall()
+            
+        existing_cols = [c['name'] for c in cols_info]
+        existing_cols_lower = {c.lower(): c for c in existing_cols}
+        
+        target_key_col = existing_cols_lower.get(key_column.lower(), key_column)
+        
+        inserted_cnt = 0
+        updated_cnt = 0
+        deleted_cnt = 0
+        
+        if apply_added and added_rows:
+            for row in added_rows:
+                fields = []
+                values = []
+                for k, v in row.items():
+                    target_c = existing_cols_lower.get(k.lower())
+                    if target_c:
+                        fields.append(f'"{target_c}"')
+                        values.append(v)
+                        
+                if fields:
+                    placeholders = ', '.join(['?'] * len(values))
+                    insert_sql = f"INSERT OR REPLACE INTO {target_table} ({', '.join(fields)}) VALUES ({placeholders});"
+                    cursor.execute(insert_sql, values)
+                    inserted_cnt += 1
+                    
+        if apply_modified and modified_rows:
+            for mod in modified_rows:
+                key_val = mod.get('key_value')
+                row_b = mod.get('row_b', {})
+                
+                update_fields = []
+                update_values = []
+                
+                for col_name, val in row_b.items():
+                    target_c = existing_cols_lower.get(col_name.lower())
+                    if target_c and target_c.lower() != target_key_col.lower():
+                        update_fields.append(f'"{target_c}" = ?')
+                        update_values.append(val)
+                        
+                if update_fields and key_val:
+                    update_values.append(key_val)
+                    update_sql = f"UPDATE {target_table} SET {', '.join(update_fields)} WHERE \"{target_key_col}\" = ?;"
+                    cursor.execute(update_sql, update_values)
+                    updated_cnt += 1
+                    
+        if apply_deleted and deleted_rows:
+            for del_row in deleted_rows:
+                del_key_val = del_row.get(target_key_col) or del_row.get(key_column)
+                if del_key_val:
+                    cursor.execute(f"DELETE FROM {target_table} WHERE \"{target_key_col}\" = ?;", (del_key_val,))
+                    deleted_cnt += 1
+                    
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Değişiklikler '{target_table}' tablosuna başarıyla uygulandı.",
+            'inserted_count': inserted_cnt,
+            'updated_count': updated_cnt,
+            'deleted_count': deleted_cnt
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("DataBase Manager starting...")
     app.run(host='0.0.0.0', debug=True, port=5000)
+
 
 

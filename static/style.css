@@ -2509,4 +2509,61 @@ code {
     gap: 12px;
 }
 
+/* ==========================================================================
+   VERSION DIFF & MERGE STYLES
+   ========================================================================== */
+.diff-row-added {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    border-left: 3px solid #10b981;
+}
+
+.diff-row-deleted {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    border-left: 3px solid #ef4444;
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.diff-row-modified {
+    background-color: rgba(245, 158, 11, 0.08) !important;
+    border-left: 3px solid #f59e0b;
+}
+
+.diff-cell-changed {
+    background-color: rgba(245, 158, 11, 0.28) !important;
+    color: #fbbf24 !important;
+    font-weight: 600;
+    position: relative;
+    border-radius: 4px;
+    padding: 6px 10px !important;
+}
+
+.diff-cell-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.diff-cell-badge.old-val {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    text-decoration: line-through;
+    margin-right: 4px;
+}
+
+.diff-cell-badge.new-val {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    font-weight: 600;
+}
+
+.btn-diff-mode.active {
+    background: var(--primary-color) !important;
+    color: white !important;
+    font-weight: 600;
+}
+
+
 

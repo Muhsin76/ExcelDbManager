@@ -58,6 +58,16 @@ const state = {
         current_sheet: '',
         columns: [], // {name, type}
         preview_rows: []
+    },
+    // Version Diff & Merge State
+    diffState: {
+        mode: 'files', // 'files' or 'db_file'
+        fileA: null,
+        fileB: null,
+        tableA: '',
+        keyColumn: '',
+        results: null,
+        activeFilter: 'all'
     }
 };
 
@@ -74,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initRelationsEvents();
     initDatabaseBackupRestoreEvents();
     initSqlConsoleEvents();
+    initDiffMergeEvents();
 
     // Load initial data
     loadDashboardData();
@@ -137,7 +148,7 @@ function initNavigation() {
     // Handle initial hash routing
     if (window.location.hash) {
         const hash = window.location.hash.substring(1);
-        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory', 'sql-console'];
+        const validTabs = ['dashboard', 'tables', 'import', 'create-table', 'relations', 'inventory', 'sql-console', 'diff-merge'];
         if (validTabs.includes(hash)) {
             switchTab(hash);
         }
@@ -196,6 +207,10 @@ function switchTab(tabId) {
         pageTitle.textContent = 'SQL Sorgu Konsolu';
         pageSubtitle.textContent = 'Veritabanı üzerinde serbestçe SQL sorguları çalıştırıp raporlar indirin';
         loadSqlConsoleTab();
+    } else if (tabId === 'diff-merge') {
+        pageTitle.textContent = 'Versiyon Karşılaştır (Diff & Merge)';
+        pageSubtitle.textContent = 'İki Excel dosyası veya veritabanı tablosu ile yeni Excel dosyasının farklarını inceleyin';
+        loadDiffMergeTab();
     }
 }
 
@@ -4330,7 +4345,6 @@ function updateInventorySaveBarState() {
     const saveBar = document.getElementById('inv-qty-save-bar');
     if (!saveBar) return;
 
-    // Clean keys that match original values
     Object.keys(dirty).forEach(rowid => {
         if (dirty[rowid] === origMap[rowid]) {
             delete dirty[rowid];
@@ -4344,5 +4358,390 @@ function updateInventorySaveBarState() {
         saveBar.classList.remove('active');
     }
 }
+
+// ==========================================================================
+// VIEW 8: VERSION DIFF & MERGE LOGIC
+// ==========================================================================
+
+async function loadDiffMergeTab() {
+    try {
+        const data = await apiCall('/api/tables');
+        const tables = data.tables || [];
+        
+        const tableSelectA = document.getElementById('diff-table-a-select');
+        const targetSelect = document.getElementById('merge-target-table-select');
+        
+        let html = '<option value="">-- Tablo Seçin --</option>';
+        tables.forEach(t => {
+            html += `<option value="${t.name}">${t.name} (${t.rowCount} satır)</option>`;
+        });
+        
+        if (tableSelectA) tableSelectA.innerHTML = html;
+        
+        let targetHtml = '<option value="">-- Yeni Tablo Oluştur --</option>';
+        tables.forEach(t => {
+            targetHtml += `<option value="${t.name}">${t.name}</option>`;
+        });
+        if (targetSelect) targetSelect.innerHTML = targetHtml;
+        
+    } catch (err) {
+        console.error('Error loading tables for Diff & Merge:', err);
+    }
+}
+
+function initDiffMergeEvents() {
+    const btnModeFiles = document.getElementById('btn-mode-files');
+    const btnModeDbFile = document.getElementById('btn-mode-db-file');
+    
+    const containerFileA = document.getElementById('diff-file-a-container');
+    const containerDbA = document.getElementById('diff-db-a-container');
+    const labelA = document.getElementById('diff-label-a');
+    
+    if (btnModeFiles && btnModeDbFile) {
+        btnModeFiles.addEventListener('click', () => {
+            state.diffState.mode = 'files';
+            btnModeFiles.classList.add('active');
+            btnModeDbFile.classList.remove('active');
+            containerFileA.classList.remove('hidden');
+            containerDbA.classList.add('hidden');
+            if (labelA) labelA.innerHTML = '<i class="fa-solid fa-file-csv text-info"></i> 1. Dosya (Eski / Mevcut Versiyon)';
+        });
+        
+        btnModeDbFile.addEventListener('click', () => {
+            state.diffState.mode = 'db_file';
+            btnModeDbFile.classList.add('active');
+            btnModeFiles.classList.remove('active');
+            containerFileA.classList.add('hidden');
+            containerDbA.classList.remove('hidden');
+            if (labelA) labelA.innerHTML = '<i class="fa-solid fa-database text-info"></i> 1. Veritabanı Tablosu (Mevcut)';
+            loadDiffMergeTab();
+        });
+    }
+
+    setupDiffDropzone('diff-drop-a', 'diff-file-a-input', 'diff-file-a-name', (file) => {
+        state.diffState.fileA = file;
+    });
+
+    setupDiffDropzone('diff-drop-b', 'diff-file-b-input', 'diff-file-b-name', (file) => {
+        state.diffState.fileB = file;
+    });
+
+    const btnRunDiff = document.getElementById('btn-run-diff');
+    if (btnRunDiff) {
+        btnRunDiff.addEventListener('click', runDiffComparison);
+    }
+
+    const filterBtns = document.querySelectorAll('.btn-diff-filter');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.diffState.activeFilter = btn.getAttribute('data-filter');
+            renderDiffTable();
+        });
+    });
+
+    const btnOpenMerge = document.getElementById('btn-open-merge-modal');
+    const modalMerge = document.getElementById('merge-modal');
+    const btnCloseMerge = document.getElementById('btn-close-merge-modal');
+    const btnCancelMerge = document.getElementById('btn-cancel-merge');
+    const btnConfirmMerge = document.getElementById('btn-confirm-merge');
+
+    if (btnOpenMerge && modalMerge) {
+        btnOpenMerge.addEventListener('click', () => {
+            if (!state.diffState.results) {
+                showToast('Önce bir karşılaştırma yapmalısınız.', 'error');
+                return;
+            }
+            loadDiffMergeTab();
+            modalMerge.classList.add('active');
+        });
+    }
+
+    if (btnCloseMerge && modalMerge) {
+        btnCloseMerge.addEventListener('click', () => modalMerge.classList.remove('active'));
+    }
+    if (btnCancelMerge && modalMerge) {
+        btnCancelMerge.addEventListener('click', () => modalMerge.classList.remove('active'));
+    }
+
+    if (btnConfirmMerge) {
+        btnConfirmMerge.addEventListener('click', executeDiffMerge);
+    }
+}
+
+function setupDiffDropzone(dropId, inputId, nameId, onFileSelect) {
+    const dropBox = document.getElementById(dropId);
+    const fileInput = document.getElementById(inputId);
+    const nameEl = document.getElementById(nameId);
+
+    if (!dropBox || !fileInput) return;
+
+    dropBox.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (nameEl) nameEl.textContent = `📁 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            onFileSelect(file);
+        }
+    });
+
+    dropBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropBox.style.borderColor = 'var(--primary-color)';
+        dropBox.style.background = 'rgba(99, 102, 241, 0.1)';
+    });
+
+    dropBox.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropBox.style.borderColor = 'rgba(255,255,255,0.2)';
+        dropBox.style.background = 'transparent';
+    });
+
+    dropBox.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropBox.style.borderColor = 'rgba(255,255,255,0.2)';
+        dropBox.style.background = 'transparent';
+
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            const file = e.dataTransfer.files[0];
+            fileInput.files = e.dataTransfer.files;
+            if (nameEl) nameEl.textContent = `📁 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            onFileSelect(file);
+        }
+    });
+}
+
+async function runDiffComparison() {
+    const mode = state.diffState.mode;
+    const keySelect = document.getElementById('diff-key-column-select');
+    const selectedKey = keySelect ? keySelect.value : '';
+
+    const formData = new FormData();
+    formData.append('compare_type', mode);
+    formData.append('key_column', selectedKey);
+
+    if (mode === 'files') {
+        if (!state.diffState.fileA) {
+            showToast('Lütfen 1. (Eski) dosyayı yükleyin.', 'error');
+            return;
+        }
+        if (!state.diffState.fileB) {
+            showToast('Lütfen 2. (Yeni) dosyayı yükleyin.', 'error');
+            return;
+        }
+        formData.append('file_a', state.diffState.fileA);
+        formData.append('file_b', state.diffState.fileB);
+    } else {
+        const tableSelect = document.getElementById('diff-table-a-select');
+        const selectedTable = tableSelect ? tableSelect.value : '';
+        if (!selectedTable) {
+            showToast('Lütfen karşılaştırılacak veritabanı tablosunu seçin.', 'error');
+            return;
+        }
+        if (!state.diffState.fileB) {
+            showToast('Lütfen 2. (Yeni) Excel/CSV dosyasını yükleyin.', 'error');
+            return;
+        }
+        formData.append('table_a', selectedTable);
+        formData.append('file_b', state.diffState.fileB);
+    }
+
+    showLoader('Farklılıklar analiz ediliyor, lütfen bekleyin...');
+
+    try {
+        const response = await fetch('/api/diff/compare', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        hideLoader();
+
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Karşılaştırma hatası oluştu.', 'error');
+            return;
+        }
+
+        state.diffState.results = data;
+        state.diffState.keyColumn = data.key_column;
+
+        if (keySelect && data.available_keys) {
+            let options = '';
+            data.available_keys.forEach(k => {
+                const isSel = k.toLowerCase() === data.key_column.toLowerCase() ? 'selected' : '';
+                options += `<option value="${k}" ${isSel}>🔑 ${k}</option>`;
+            });
+            keySelect.innerHTML = options;
+        }
+
+        document.getElementById('diff-stat-added').textContent = data.summary.added_count;
+        document.getElementById('diff-stat-modified').textContent = data.summary.modified_count;
+        document.getElementById('diff-stat-deleted').textContent = data.summary.deleted_count;
+        document.getElementById('diff-stat-unchanged').textContent = data.summary.unchanged_count;
+
+        const resultsWrapper = document.getElementById('diff-results-wrapper');
+        if (resultsWrapper) resultsWrapper.classList.remove('hidden');
+
+        renderDiffTable();
+
+        showToast(`Analiz tamamlandı. ${data.summary.added_count} Yeni, ${data.summary.modified_count} Değişen, ${data.summary.deleted_count} Silinen tespit edildi.`);
+
+    } catch (err) {
+        hideLoader();
+        showToast(err.message, 'error');
+    }
+}
+
+function renderDiffTable() {
+    const res = state.diffState.results;
+    if (!res) return;
+
+    const filter = state.diffState.activeFilter;
+    const thead = document.getElementById('diff-table-thead');
+    const tbody = document.getElementById('diff-table-tbody');
+
+    if (!thead || !tbody) return;
+
+    const cols = res.columns || [];
+    const keyCol = res.key_column;
+
+    let headerHtml = `<th style="width: 130px; text-align: center;">Durum</th>`;
+    cols.forEach(c => {
+        const isKey = c.toLowerCase() === keyCol.toLowerCase();
+        headerHtml += `<th>${isKey ? '<i class="fa-solid fa-key text-warning mr-1"></i>' : ''}${c}</th>`;
+    });
+    thead.innerHTML = headerHtml;
+
+    let rowsToRender = [];
+
+    if (filter === 'all' || filter === 'added') {
+        res.added_rows.forEach(r => rowsToRender.push({ type: 'added', data: r }));
+    }
+    if (filter === 'all' || filter === 'modified') {
+        res.modified_rows.forEach(m => rowsToRender.push({ type: 'modified', data: m }));
+    }
+    if (filter === 'all' || filter === 'deleted') {
+        res.deleted_rows.forEach(r => rowsToRender.push({ type: 'deleted', data: r }));
+    }
+
+    if (rowsToRender.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="text-center text-muted" style="padding: 30px;">Bu filtre altında gösterilecek kayıt bulunmuyor.</td></tr>`;
+        return;
+    }
+
+    let bodyHtml = '';
+
+    rowsToRender.forEach(item => {
+        if (item.type === 'added') {
+            bodyHtml += `<tr class="diff-row-added">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-success" style="font-weight:600;">+ EKLENDİ</span></td>`;
+            cols.forEach(c => {
+                const val = item.data[c] !== undefined && item.data[c] !== null ? item.data[c] : '';
+                bodyHtml += `<td>${val}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        } else if (item.type === 'deleted') {
+            bodyHtml += `<tr class="diff-row-deleted">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-danger" style="font-weight:600;">- SİLİNDİ</span></td>`;
+            cols.forEach(c => {
+                const val = item.data[c] !== undefined && item.data[c] !== null ? item.data[c] : '';
+                bodyHtml += `<td>${val}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        } else if (item.type === 'modified') {
+            const mod = item.data;
+            const changes = mod.changes || {};
+            const rowB = mod.row_b || {};
+            const rowA = mod.row_a || {};
+
+            bodyHtml += `<tr class="diff-row-modified">`;
+            bodyHtml += `<td style="text-align: center;"><span class="badge badge-warning" style="font-weight:600;">~ DEĞİŞTİ</span></td>`;
+            
+            cols.forEach(c => {
+                if (changes[c]) {
+                    const oldV = changes[c].old || '(boş)';
+                    const newV = changes[c].new || '(boş)';
+                    bodyHtml += `
+                        <td class="diff-cell-changed">
+                            <span class="diff-cell-badge old-val" title="Eski Değer">${oldV}</span>
+                            <i class="fa-solid fa-arrow-right text-xs text-muted"></i>
+                            <span class="diff-cell-badge new-val" title="Yeni Değer">${newV}</span>
+                        </td>
+                    `;
+                } else {
+                    const val = rowB[c] !== undefined ? rowB[c] : (rowA[c] !== undefined ? rowA[c] : '');
+                    bodyHtml += `<td>${val}</td>`;
+                }
+            });
+            bodyHtml += `</tr>`;
+        }
+    });
+
+    tbody.innerHTML = bodyHtml;
+}
+
+async function executeDiffMerge() {
+    const res = state.diffState.results;
+    if (!res) return;
+
+    const targetSelect = document.getElementById('merge-target-table-select');
+    const targetTable = targetSelect ? targetSelect.value : '';
+
+    const chkAdded = document.getElementById('chk-merge-added');
+    const chkModified = document.getElementById('chk-merge-modified');
+    const chkDeleted = document.getElementById('chk-merge-deleted');
+
+    const applyAdded = chkAdded ? chkAdded.checked : true;
+    const applyModified = chkModified ? chkModified.checked : true;
+    const applyDeleted = chkDeleted ? chkDeleted.checked : false;
+
+    let finalTableName = targetTable;
+    if (!finalTableName) {
+        finalTableName = prompt('Lütfen oluşturulacak yeni veritabanı tablo adını girin:', 'yeni_birlesik_tablo');
+        if (!finalTableName) return;
+    }
+
+    showLoader('Değişiklikler veritabanına uygulanıyor...');
+
+    try {
+        const payload = {
+            target_table: finalTableName,
+            key_column: res.key_column,
+            apply_added: applyAdded,
+            apply_modified: applyModified,
+            apply_deleted: applyDeleted,
+            added_rows: res.added_rows,
+            modified_rows: res.modified_rows,
+            deleted_rows: res.deleted_rows
+        };
+
+        const data = await apiCall('/api/diff/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        hideLoader();
+
+        const modalMerge = document.getElementById('merge-modal');
+        if (modalMerge) modalMerge.classList.remove('active');
+
+        showToast(data.message || 'Veriler başarıyla birleştirildi.');
+        
+        loadDashboardData();
+        loadTablesList();
+
+    } catch (err) {
+        hideLoader();
+        showToast(err.message, 'error');
+    }
+}
+
+window.loadDiffMergeTab = loadDiffMergeTab;
+window.initDiffMergeEvents = initDiffMergeEvents;
+window.runDiffComparison = runDiffComparison;
+window.executeDiffMerge = executeDiffMerge;
+
 
 

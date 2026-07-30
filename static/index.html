@@ -55,6 +55,10 @@
                     <i class="fa-solid fa-terminal"></i>
                     <span>SQL Konsolu</span>
                 </a>
+                <a href="#diff-merge" class="nav-item" data-tab="diff-merge">
+                    <i class="fa-solid fa-code-compare"></i>
+                    <span>Versiyon Karşılaştır (Diff)</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <button id="theme-toggle" class="theme-btn" title="Temayı Değiştir">
@@ -862,6 +866,178 @@
                     </div>
                 </section>
 
+                <!-- 8. VERSION DIFF & MERGE VIEW -->
+                <section id="view-diff-merge" class="tab-view">
+                    <div class="card-glass" style="padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+                        
+                        <!-- Header & Mode Switcher -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                            <div>
+                                <h3 style="font-size: 1.3rem; font-weight: 700; margin: 0;">
+                                    <i class="fa-solid fa-code-compare text-indigo" style="margin-right: 8px;"></i> Akıllı Excel & Tablo Karşılaştırıcı (Diff & Merge)
+                                </h3>
+                                <p class="text-secondary text-sm" style="margin: 4px 0 0 0;">
+                                    İki Excel/CSV dosyasını veya veritabanı tablosu ile yeni Excel dosyasını hücre bazında kıyaslayın, değişiklikleri yönetin.
+                                </p>
+                            </div>
+                            
+                            <!-- Mode selector buttons -->
+                            <div class="diff-mode-selector" style="display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <button type="button" class="btn btn-sm btn-diff-mode active" data-mode="files" id="btn-mode-files" style="padding: 6px 14px; border-radius: 6px;">
+                                    <i class="fa-solid fa-file-excel mr-1"></i> Dosya vs Dosya
+                                </button>
+                                <button type="button" class="btn btn-sm btn-diff-mode" data-mode="db_file" id="btn-mode-db-file" style="padding: 6px 14px; border-radius: 6px;">
+                                    <i class="fa-solid fa-database mr-1"></i> DB Tablosu vs Dosya
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dropzone Grid -->
+                        <div class="diff-inputs-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                            
+                            <!-- Source A Container (File or DB Table) -->
+                            <div class="diff-source-card card-glass" style="padding: 16px; border: 1px dashed var(--border-color); background: rgba(0,0,0,0.15); border-radius: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600; margin: 0; color: var(--text-secondary);" id="diff-label-a">
+                                        <i class="fa-solid fa-file-csv text-info"></i> 1. Dosya (Eski / Mevcut Versiyon)
+                                    </h4>
+                                    <span class="badge badge-info" style="font-size: 0.75rem;">Kaynak A</span>
+                                </div>
+                                
+                                <!-- File A Dropzone -->
+                                <div id="diff-file-a-container">
+                                    <div class="drag-drop-box" id="diff-drop-a" style="border: 2px dashed rgba(255,255,255,0.2); padding: 24px 16px; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.3s ease;">
+                                        <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: var(--primary-color); margin-bottom: 8px;"></i>
+                                        <p style="margin: 0; font-weight: 500; font-size: 0.85rem;" id="diff-file-a-name">1. Excel veya CSV Dosyasını Sürükleyin</p>
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary);">veya dosya seçmek için tıklayın</span>
+                                        <input type="file" id="diff-file-a-input" accept=".xlsx,.xls,.csv" class="hidden">
+                                    </div>
+                                </div>
+                                
+                                <!-- DB Table A Selector (Hidden by default) -->
+                                <div id="diff-db-a-container" class="hidden">
+                                    <label style="font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; display: block;">Karşılaştırılacak Veritabanı Tablosu:</label>
+                                    <select id="diff-table-a-select" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                        <option value="">-- Tablo Seçin --</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Source B Container (New File) -->
+                            <div class="diff-source-card card-glass" style="padding: 16px; border: 1px dashed var(--border-color); background: rgba(0,0,0,0.15); border-radius: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                    <h4 style="font-size: 0.95rem; font-weight: 600; margin: 0; color: var(--text-secondary);">
+                                        <i class="fa-solid fa-file-excel text-success"></i> 2. Dosya (Yeni / Güncel Versiyon)
+                                    </h4>
+                                    <span class="badge badge-success" style="font-size: 0.75rem;">Kaynak B</span>
+                                </div>
+                                
+                                <div class="drag-drop-box" id="diff-drop-b" style="border: 2px dashed rgba(255,255,255,0.2); padding: 24px 16px; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: #10b981; margin-bottom: 8px;"></i>
+                                    <p style="margin: 0; font-weight: 500; font-size: 0.85rem;" id="diff-file-b-name">2. Excel veya CSV Dosyasını Sürükleyin</p>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary);">veya dosya seçmek için tıklayın</span>
+                                    <input type="file" id="diff-file-b-input" accept=".xlsx,.xls,.csv" class="hidden">
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Configuration Bar & Execute Button -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; background: rgba(0,0,0,0.2); padding: 14px 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-key text-warning mr-1"></i> Eşleştirme Sütunu (Key Column):</label>
+                                <select id="diff-key-column-select" class="form-control" style="min-width: 180px; padding: 6px 12px; border-radius: 6px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.85rem;">
+                                    <option value="">(Otomatik Tespit Et)</option>
+                                </select>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);" title="Satırların birbirleriyle neye göre eşleşeceğini seçin (örneğin: ID, Ürün Kodu, E-posta vb.)">
+                                    <i class="fa-solid fa-circle-info"></i> Satır eşleştirme anahtarı
+                                </span>
+                            </div>
+
+                            <button type="button" class="btn btn-primary" id="btn-run-diff" style="padding: 10px 24px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-magnifying-glass"></i> Farkları Karşılaştır ve Analiz Et
+                            </button>
+                        </div>
+
+                        <!-- Diff Output Results Container (Hidden until user clicks Compare) -->
+                        <div id="diff-results-wrapper" class="hidden" style="display: flex; flex-direction: column; gap: 20px; text-align: left;">
+                            
+                            <!-- Summary Stat Cards -->
+                            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                                <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08);">
+                                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-label">Yeni Satır (Eklenen)</span>
+                                        <h3 id="diff-stat-added" style="color: #10b981;">0</h3>
+                                    </div>
+                                </div>
+
+                                <div class="stat-card" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
+                                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-label">Değişen Satır (Güncellenen)</span>
+                                        <h3 id="diff-stat-modified" style="color: #f59e0b;">0</h3>
+                                    </div>
+                                </div>
+
+                                <div class="stat-card" style="border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.08);">
+                                    <div class="stat-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+                                        <i class="fa-solid fa-minus"></i>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-label">Silinen / Eksik Satır</span>
+                                        <h3 id="diff-stat-deleted" style="color: #ef4444;">0</h3>
+                                    </div>
+                                </div>
+
+                                <div class="stat-card" style="border-left: 4px solid #6366f1; background: rgba(99, 102, 241, 0.08);">
+                                    <div class="stat-icon" style="background: rgba(99, 102, 241, 0.2); color: #6366f1;">
+                                        <i class="fa-solid fa-check-double"></i>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-label">Birebir Aynı Satır</span>
+                                        <h3 id="diff-stat-unchanged" style="color: #6366f1;">0</h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Filter & Actions Bar -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <div class="diff-filter-btns" style="display: flex; gap: 8px;">
+                                    <button type="button" class="btn btn-sm btn-secondary active btn-diff-filter" data-filter="all">Tüm Değişiklikler</button>
+                                    <button type="button" class="btn btn-sm btn-outline-success btn-diff-filter" data-filter="added">🟢 Eklenenler</button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning btn-diff-filter" data-filter="modified">🟡 Değişenler</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger btn-diff-filter" data-filter="deleted">🔴 Silinenler</button>
+                                </div>
+
+                                <button type="button" class="btn btn-success" id="btn-open-merge-modal" style="padding: 8px 18px; font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-code-merge"></i> Değişiklikleri Veritabanına Uygula (Merge)...
+                                </button>
+                            </div>
+
+                            <!-- Interactive Diff Table -->
+                            <div class="table-responsive card-glass" style="max-height: 480px; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                                <table class="data-table diff-table" id="diff-display-table" style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr id="diff-table-thead">
+                                            <!-- Dynamic headers -->
+                                        </tr>
+                                    </thead>
+                                    <tbody id="diff-table-tbody">
+                                        <!-- Dynamic diff rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </section>
+
             </div>
         </main>
     </div>
@@ -994,6 +1170,53 @@
                 <button id="btn-inv-qty-discard" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 500;">İptal Et</button>
                 <button id="btn-inv-qty-save" class="btn btn-success btn-sm" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600;">
                     <i class="fa-solid fa-floppy-disk mr-1"></i> Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Merge Confirmation Modal -->
+    <div class="modal" id="merge-modal">
+        <div class="modal-content card-glass" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-code-merge text-success mr-2"></i> Veritabanı Birleştirme (Merge)</h3>
+                <button class="btn-close-modal" id="btn-close-merge-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; text-align: left;">
+                <p class="text-secondary text-sm" style="margin: 0;">Farklılıklar seçilen veritabanı tablosuna SQL transaction ile işlenecektir.</p>
+                
+                <div>
+                    <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 6px;">Hedef Veritabanı Tablosu:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="merge-target-table-select" class="form-control" style="flex: 1; padding: 8px 12px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <!-- Filled dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.2); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px;">
+                    <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary);">Uygulanacak Değişiklik Seçenekleri:</span>
+                    
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" id="chk-merge-added" checked style="width: 16px; height: 16px; accent-color: #10b981;">
+                        <span>🟢 Yeni Eklenen Satırları Ekle (INSERT)</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" id="chk-merge-modified" checked style="width: 16px; height: 16px; accent-color: #f59e0b;">
+                        <span>🟡 Değişen Satırları Güncelle (UPDATE)</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" id="chk-merge-deleted" style="width: 16px; height: 16px; accent-color: #ef4444;">
+                        <span style="color: var(--danger-color);">🔴 Silinen Satırları Veritabanından Sil (DELETE)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-cancel-merge">İptal</button>
+                <button type="button" class="btn btn-success" id="btn-confirm-merge" style="font-weight: 600;">
+                    <i class="fa-solid fa-check"></i> Birleştirmeyi Başlat
                 </button>
             </div>
         </div>
