@@ -3901,8 +3901,11 @@ function renderInventoryChart(sortedGroups) {
 }
 
 function renderInventoryDevicesTable() {
+    const theadRow = document.getElementById('inv-details-headers');
     const tbody = document.getElementById('inv-devices-tbody');
     const title = document.getElementById('inv-details-title');
+
+    if (!tbody) return;
 
     tbody.innerHTML = '';
 
@@ -3911,6 +3914,80 @@ function renderInventoryDevicesTable() {
     const selected = state.inventoryState.selectedMaterial;
 
     if (!mapped.material) return;
+
+    // Build active columns list in user's preferred sequence:
+    // 1. ID (system)
+    // 2. Malzeme Adı (mandatory)
+    // 3. Adet (mandatory)
+    // 4. Model (optional - only if mapped)
+    // 5. Seri No (optional - only if mapped)
+    // 6. MAC Adresi (optional - only if mapped)
+    // 7. Birim Fiyat & Toplam Tutar (optional - only if mapped)
+    // 8. İşlem (mandatory)
+
+    const activeCols = [
+        { id: 'id', title: 'ID', align: 'center', width: '50px', sortable: true },
+        { id: 'material', title: 'Malzeme Adı', align: 'left', sortable: true },
+        { id: 'qty', title: 'Adet', align: 'center', minWidth: '150px', sortable: true }
+    ];
+
+    if (mapped.model) {
+        activeCols.push({ id: 'model', title: 'Model', align: 'left', sortable: true });
+    }
+    if (mapped.serial) {
+        activeCols.push({ id: 'serial', title: 'Seri No', align: 'left', minWidth: '140px', sortable: true });
+    }
+    if (mapped.mac) {
+        activeCols.push({ id: 'mac', title: 'MAC Adresi', align: 'left', minWidth: '140px', sortable: true });
+    }
+    if (mapped.price) {
+        activeCols.push({ id: 'unit_price', title: 'Birim Fiyat', align: 'right', minWidth: '120px', sortable: true });
+        activeCols.push({ id: 'total_price', title: 'Toplam Tutar', align: 'right', minWidth: '130px', sortable: false });
+    }
+    activeCols.push({ id: 'action', title: 'İşlem', align: 'center', minWidth: '110px', sortable: false });
+
+    // Render <thead> dynamically
+    if (theadRow) {
+        const sortCol = state.inventoryState.filters.sortCol || 'id';
+        const sortOrder = state.inventoryState.filters.sortOrder || 'asc';
+
+        let headerHtml = '';
+        activeCols.forEach(col => {
+            const alignStyle = `text-align: ${col.align};`;
+            const widthStyle = col.width ? `width: ${col.width};` : (col.minWidth ? `min-width: ${col.minWidth};` : '');
+            const sortAttr = col.sortable ? `data-sort="${col.id}" style="cursor: pointer; ${alignStyle} ${widthStyle} white-space: nowrap;"` : `style="${alignStyle} ${widthStyle} white-space: nowrap;"`;
+            
+            let sortIcon = '';
+            if (col.sortable) {
+                if (sortCol === col.id) {
+                    sortIcon = `<i class="fa-solid fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} ms-1"></i>`;
+                } else {
+                    sortIcon = `<i class="fa-solid fa-sort text-muted ms-1"></i>`;
+                }
+            }
+
+            headerHtml += `<th ${sortAttr}>${col.title}${sortIcon}</th>`;
+        });
+        theadRow.innerHTML = headerHtml;
+
+        // Attach sort click handlers
+        theadRow.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.getAttribute('data-sort');
+                const currentOrder = state.inventoryState.filters.sortOrder;
+                const currentCol = state.inventoryState.filters.sortCol;
+
+                let newOrder = 'asc';
+                if (currentCol === col) {
+                    newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+                }
+
+                state.inventoryState.filters.sortCol = col;
+                state.inventoryState.filters.sortOrder = newOrder;
+                renderInventoryDevicesTable();
+            });
+        });
+    }
 
     // 1. Filter rows by material first
     let filteredRows = [];
@@ -3987,12 +4064,13 @@ function renderInventoryDevicesTable() {
         : `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Detay Listesi (${filteredRows.length} Adet)`;
 
     if (filteredRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${activeCols.length}" class="text-center text-muted">Kayıt bulunamadı.</td></tr>`;
         return;
     }
 
     filteredRows.forEach((row, index) => {
         const tr = document.createElement('tr');
+        let rowHtml = '';
 
         const matVal = row[mapped.material] || 'Tanımlanmamış';
         const modelVal = mapped.model && row[mapped.model] !== null ? String(row[mapped.model]).trim() : '';
@@ -4000,56 +4078,74 @@ function renderInventoryDevicesTable() {
         const macVal = mapped.mac && row[mapped.mac] !== null ? String(row[mapped.mac]).trim() : '';
         const serVal = mapped.serial && row[mapped.serial] !== null ? String(row[mapped.serial]).trim() : '';
 
-        const modelCell = modelVal ? `<span class="font-medium text-secondary">${modelVal}</span>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
-        
-        let qtyCell = '';
-        if (mapped.qty && mapped.qty !== 'row_count') {
-            qtyCell = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
-                    <button class="btn btn-secondary btn-xs btn-qty-dec" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">-</button>
-                    <span class="font-semibold text-secondary qty-val-display" style="min-width: 45px; display: inline-block; text-align: center; white-space: nowrap;">${qtyVal.toLocaleString()}</span>
-                    <button class="btn btn-secondary btn-xs btn-qty-inc" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">+</button>
-                </div>
-            `;
-        } else {
-            qtyCell = `<span class="font-semibold text-secondary" style="white-space: nowrap;">${qtyVal.toLocaleString()}</span>`;
-        }
-
-        // Price formatting
-        let unitPriceCell = '<span class="text-muted" style="font-size: 0.75rem;">-</span>';
-        let totalPriceCell = '<span class="text-muted" style="font-size: 0.75rem;">-</span>';
-        if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
-            const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
-            const pVal = parseFloat(pClean);
-            if (!isNaN(pVal)) {
-                unitPriceCell = `<span style="color: #10b981; font-weight: 600; white-space: nowrap;">${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
-                totalPriceCell = `<span style="color: #10b981; font-weight: 700; white-space: nowrap;">${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
+        activeCols.forEach(col => {
+            if (col.id === 'id') {
+                rowHtml += `<td class="text-center font-semibold text-secondary" style="width: 50px; white-space: nowrap;">${row._rowid_ || (index + 1)}</td>`;
+            } else if (col.id === 'material') {
+                rowHtml += `<td class="font-medium" style="text-align: left; white-space: nowrap;">${matVal}</td>`;
+            } else if (col.id === 'qty') {
+                let qtyCell = '';
+                if (mapped.qty && mapped.qty !== 'row_count') {
+                    qtyCell = `
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
+                            <button class="btn btn-secondary btn-xs btn-qty-dec" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">-</button>
+                            <span class="font-semibold text-secondary qty-val-display" style="min-width: 45px; display: inline-block; text-align: center; white-space: nowrap;">${qtyVal.toLocaleString()}</span>
+                            <button class="btn btn-secondary btn-xs btn-qty-inc" data-rowid="${row._rowid_}" style="padding: 2px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 4px; line-height: 1; min-width: 24px;">+</button>
+                        </div>
+                    `;
+                } else {
+                    qtyCell = `<span class="font-semibold text-secondary" style="white-space: nowrap;">${qtyVal.toLocaleString()}</span>`;
+                }
+                rowHtml += `<td style="text-align: center; min-width: 150px; white-space: nowrap;">${qtyCell}</td>`;
+            } else if (col.id === 'model') {
+                const modelCell = modelVal ? `<span class="font-medium text-secondary">${modelVal}</span>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş</span>';
+                rowHtml += `<td class="font-medium" style="text-align: left; white-space: nowrap;">${modelCell}</td>`;
+            } else if (col.id === 'serial') {
+                const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem; white-space: nowrap;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş</span>';
+                rowHtml += `<td style="text-align: left; min-width: 140px; white-space: nowrap;">${serCell}</td>`;
+            } else if (col.id === 'mac') {
+                const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem; white-space: nowrap;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş</span>';
+                rowHtml += `<td style="text-align: left; min-width: 140px; white-space: nowrap;">${macCell}</td>`;
+            } else if (col.id === 'unit_price') {
+                let unitPriceStr = '-';
+                if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
+                    const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
+                    const pVal = parseFloat(pClean);
+                    if (!isNaN(pVal)) {
+                        unitPriceStr = `${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
+                    }
+                }
+                rowHtml += `<td style="text-align: right; min-width: 120px; color: #10b981; font-weight: 600; white-space: nowrap;">${unitPriceStr}</td>`;
+            } else if (col.id === 'total_price') {
+                let totalPriceStr = '-';
+                if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
+                    const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
+                    const pVal = parseFloat(pClean);
+                    if (!isNaN(pVal)) {
+                        totalPriceStr = `${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
+                    }
+                }
+                rowHtml += `<td style="text-align: right; min-width: 130px; color: #10b981; font-weight: 700; white-space: nowrap;">${totalPriceStr}</td>`;
+            } else if (col.id === 'action') {
+                rowHtml += `
+                    <td style="text-align: center; min-width: 110px; white-space: nowrap;">
+                        <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 4px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="fa-solid fa-circle-info"></i> Detay
+                        </button>
+                    </td>
+                `;
             }
-        }
+        });
 
-        const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem; white-space: nowrap;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş / Belirtilmemiş</span>';
-        const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem; white-space: nowrap;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Boş / Belirtilmemiş</span>';
-
-        tr.innerHTML = `
-            <td class="text-center font-semibold text-secondary" style="width: 50px; white-space: nowrap;">${row._rowid_ || (index + 1)}</td>
-            <td class="font-medium" style="text-align: left; white-space: nowrap;">${matVal}</td>
-            <td class="font-medium" style="text-align: left; white-space: nowrap;">${modelCell}</td>
-            <td style="text-align: center; min-width: 150px; white-space: nowrap;">${qtyCell}</td>
-            <td style="text-align: right; min-width: 120px; white-space: nowrap;">${unitPriceCell}</td>
-            <td style="text-align: right; min-width: 130px; white-space: nowrap;">${totalPriceCell}</td>
-            <td style="text-align: left; min-width: 140px; white-space: nowrap;">${serCell}</td>
-            <td style="text-align: left; min-width: 140px; white-space: nowrap;">${macCell}</td>
-            <td style="text-align: center; min-width: 130px; white-space: nowrap;">
-                <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 4px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
-                    <i class="fa-solid fa-circle-info"></i> Detay
-                </button>
-            </td>
-        `;
+        tr.innerHTML = rowHtml;
 
         // Modal trigger on Detay button
-        tr.querySelector('.btn-view-dev-details').addEventListener('click', () => {
-            openDeviceDetailModal(row);
-        });
+        const btnDetay = tr.querySelector('.btn-view-dev-details');
+        if (btnDetay) {
+            btnDetay.addEventListener('click', () => {
+                openDeviceDetailModal(row);
+            });
+        }
 
         // Increment/Decrement event handlers
         if (mapped.qty && mapped.qty !== 'row_count') {
@@ -4057,45 +4153,52 @@ function renderInventoryDevicesTable() {
             const incBtn = tr.querySelector('.btn-qty-inc');
             const qtySpan = tr.querySelector('.qty-val-display');
 
-            decBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const rowid = row._rowid_;
-                const origQtyKey = rowid;
+            if (decBtn && incBtn && qtySpan) {
+                decBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    let current = parseFloat(state.inventoryState.dirtyQty[row._rowid_] !== undefined 
+                        ? state.inventoryState.dirtyQty[row._rowid_] 
+                        : (row[mapped.qty] || 1));
+                    if (isNaN(current)) current = 1;
+                    if (current <= 0) return;
 
-                if (state.inventoryState.originalQty[origQtyKey] === undefined) {
-                    state.inventoryState.originalQty[origQtyKey] = parseFloat(row[mapped.qty]) || 0;
-                }
+                    if (state.inventoryState.originalQty[row._rowid_] === undefined) {
+                        state.inventoryState.originalQty[row._rowid_] = row[mapped.qty];
+                    }
 
-                let currentQty = parseFloat(row[mapped.qty]) || 0;
-                if (currentQty <= 0) return;
+                    current -= 1;
+                    state.inventoryState.dirtyQty[row._rowid_] = current;
+                    row[mapped.qty] = current;
+                    qtySpan.textContent = current.toLocaleString();
 
-                let newQty = currentQty - 1;
-                row[mapped.qty] = newQty;
-                state.inventoryState.dirtyQty[rowid] = newQty;
+                    const saveBar = document.getElementById('inv-qty-save-bar');
+                    if (saveBar) saveBar.classList.add('active');
 
-                qtySpan.textContent = newQty.toLocaleString();
-                calculateAndRenderInventorySilent();
-                updateInventorySaveBarState();
-            });
+                    calculateAndRenderInventorySilent();
+                });
 
-            incBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const rowid = row._rowid_;
-                const origQtyKey = rowid;
+                incBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    let current = parseFloat(state.inventoryState.dirtyQty[row._rowid_] !== undefined 
+                        ? state.inventoryState.dirtyQty[row._rowid_] 
+                        : (row[mapped.qty] || 1));
+                    if (isNaN(current)) current = 0;
 
-                if (state.inventoryState.originalQty[origQtyKey] === undefined) {
-                    state.inventoryState.originalQty[origQtyKey] = parseFloat(row[mapped.qty]) || 0;
-                }
+                    if (state.inventoryState.originalQty[row._rowid_] === undefined) {
+                        state.inventoryState.originalQty[row._rowid_] = row[mapped.qty];
+                    }
 
-                let currentQty = parseFloat(row[mapped.qty]) || 0;
-                let newQty = currentQty + 1;
-                row[mapped.qty] = newQty;
-                state.inventoryState.dirtyQty[rowid] = newQty;
+                    current += 1;
+                    state.inventoryState.dirtyQty[row._rowid_] = current;
+                    row[mapped.qty] = current;
+                    qtySpan.textContent = current.toLocaleString();
 
-                qtySpan.textContent = newQty.toLocaleString();
-                calculateAndRenderInventorySilent();
-                updateInventorySaveBarState();
-            });
+                    const saveBar = document.getElementById('inv-qty-save-bar');
+                    if (saveBar) saveBar.classList.add('active');
+
+                    calculateAndRenderInventorySilent();
+                });
+            }
         }
 
         tbody.appendChild(tr);
