@@ -2560,27 +2560,240 @@ code {
 }
 
 .btn-diff-mode.active {
+}
+.diagram-column-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.diagram-column-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.diagram-column-type {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+.diagram-column-row .diagram-badge {
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.diagram-column-row .badge-pk {
+    background-color: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.diagram-column-row .badge-fk {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.diagram-column-row .badge-logical {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fde047;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.diagram-toolbar {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.diagram-layout-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+    align-items: stretch;
+}
+@media (max-width: 992px) {
+    .diagram-layout-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.diagram-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+.diagram-sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+.diagram-sidebar-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+    width: 14px;
+    height: 14px;
+}
+.diagram-column-anchor {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    cursor: crosshair;
+    transition: color 0.15s, transform 0.15s;
+}
+.diagram-column-anchor:hover {
+    color: var(--accent-primary) !important;
+    transform: scale(1.3);
+}
+.relation-preview-box {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* Floating Qty Save Bar */
+.qty-save-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(23, 25, 35, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 14px 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    z-index: 1000;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    opacity: 0;
+    pointer-events: none;
+    max-width: 90%;
+    width: 600px;
+}
+
+.qty-save-bar.active {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.qty-save-bar-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.qty-save-bar-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qty-save-bar-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* ==========================================================================
+   VERSION DIFF & MERGE STYLES
+   ========================================================================== */
+.diff-row-added {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    border-left: 3px solid #10b981;
+}
+
+.diff-row-deleted {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    border-left: 3px solid #ef4444;
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.diff-row-modified {
+    background-color: rgba(245, 158, 11, 0.08) !important;
+    border-left: 3px solid #f59e0b;
+}
+
+.diff-cell-changed {
+    background-color: rgba(245, 158, 11, 0.28) !important;
+    color: #fbbf24 !important;
+    font-weight: 600;
+    position: relative;
+    border-radius: 4px;
+    padding: 6px 10px !important;
+}
+
+.diff-cell-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.diff-cell-badge.old-val {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    text-decoration: line-through;
+    margin-right: 4px;
+}
+
+.diff-cell-badge.new-val {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    font-weight: 600;
+}
+
+.btn-diff-mode.active {
     background: var(--primary-color) !important;
     color: white !important;
     font-weight: 600;
 }
 
-/* Stat Card Overflow Safety & Auto Font Scaling */
+/* Stat Card Responsive & Full Value Visibility */
+.stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+    gap: 16px !important;
+}
+
 .stat-card {
-    overflow: hidden !important;
+    position: relative !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+    transition: all 0.2s ease !important;
     min-width: 0 !important;
 }
 
+.stat-card:hover {
+    transform: translateY(-2px);
+    z-index: 5;
+}
+
 .stat-card .stat-value {
-    font-size: clamp(1.1rem, 2vw, 1.5rem) !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    max-width: 100% !important;
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+    margin-top: 4px !important;
 }
 
 .stat-card .stat-label {
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
+    font-size: 0.75rem !important;
+    color: var(--text-secondary, #94a3b8) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    word-break: break-word !important;
 }
