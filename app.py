@@ -54,11 +54,15 @@ def init_db():
             serial_col TEXT
         );
     """)
-    # Try adding model_col if table already existed without it
+    # Try adding model_col and price_col if table already existed without them
     try:
         cursor.execute("ALTER TABLE _sys_inventory_mappings ADD COLUMN model_col TEXT;")
     except sqlite3.OperationalError:
-        pass  # Column already exists
+        pass
+    try:
+        cursor.execute("ALTER TABLE _sys_inventory_mappings ADD COLUMN price_col TEXT;")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -1666,7 +1670,7 @@ def get_inventory_mapping(table_name):
             return jsonify({'success': True, 'mapping': None})
             
         cursor.execute("""
-            SELECT material_col, model_col, qty_col, mac_col, serial_col 
+            SELECT material_col, model_col, qty_col, mac_col, serial_col, price_col 
             FROM _sys_inventory_mappings 
             WHERE table_name = ?;
         """, (table_name,))
@@ -1674,14 +1678,16 @@ def get_inventory_mapping(table_name):
         conn.close()
         
         if row:
+            row_dict = dict(row)
             return jsonify({
                 'success': True,
                 'mapping': {
-                    'material': row['material_col'],
-                    'model': row['model_col'],
-                    'qty': row['qty_col'],
-                    'mac': row['mac_col'],
-                    'serial': row['serial_col']
+                    'material': row_dict.get('material_col', ''),
+                    'model': row_dict.get('model_col', ''),
+                    'qty': row_dict.get('qty_col', ''),
+                    'mac': row_dict.get('mac_col', ''),
+                    'serial': row_dict.get('serial_col', ''),
+                    'price': row_dict.get('price_col', '')
                 }
             })
         return jsonify({'success': True, 'mapping': None})
@@ -1699,6 +1705,7 @@ def save_inventory_mapping():
         qty_col = data.get('qty')
         mac_col = data.get('mac')
         serial_col = data.get('serial')
+        price_col = data.get('price')
         
         if not table_name:
             return jsonify({'success': False, 'error': 'Tablo adı gereklidir.'}), 400
@@ -1706,15 +1713,16 @@ def save_inventory_mapping():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO _sys_inventory_mappings (table_name, material_col, model_col, qty_col, mac_col, serial_col)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO _sys_inventory_mappings (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(table_name) DO UPDATE SET
                 material_col = excluded.material_col,
                 model_col = excluded.model_col,
                 qty_col = excluded.qty_col,
                 mac_col = excluded.mac_col,
-                serial_col = excluded.serial_col;
-        """, (table_name, material_col, model_col, qty_col, mac_col, serial_col))
+                serial_col = excluded.serial_col,
+                price_col = excluded.price_col;
+        """, (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col))
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': 'Eşleştirme başarıyla kaydedildi.'})

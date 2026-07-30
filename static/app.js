@@ -3152,7 +3152,7 @@ async function loadInventoryTab() {
         });
 
         // Mapping dropdowns change events
-        ['inv-col-material', 'inv-col-model', 'inv-col-qty', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
+        ['inv-col-material', 'inv-col-model', 'inv-col-qty', 'inv-col-price', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', (e) => {
@@ -3218,6 +3218,7 @@ async function loadInventoryTab() {
                             material: mapped.material,
                             model: mapped.model,
                             qty: mapped.qty,
+                            price: mapped.price,
                             mac: mapped.mac,
                             serial: mapped.serial
                         })
@@ -3443,20 +3444,23 @@ async function loadInventoryTableData(tableName) {
                 const matVal = colExists(mapping.material) ? mapping.material : '';
                 const modelVal = colExists(mapping.model) ? mapping.model : '';
                 const qtyVal = (mapping.qty === 'row_count' || colExists(mapping.qty)) ? mapping.qty : 'row_count';
+                const priceVal = colExists(mapping.price) ? mapping.price : '';
                 const macVal = colExists(mapping.mac) ? mapping.mac : '';
                 const serialVal = colExists(mapping.serial) ? mapping.serial : '';
 
                 // Update dropdown values
                 document.getElementById('inv-col-material').value = matVal;
-                document.getElementById('inv-col-model').value = modelVal;
+                if (document.getElementById('inv-col-model')) document.getElementById('inv-col-model').value = modelVal;
                 document.getElementById('inv-col-qty').value = qtyVal;
-                document.getElementById('inv-col-mac').value = macVal;
-                document.getElementById('inv-col-serial').value = serialVal;
+                if (document.getElementById('inv-col-price')) document.getElementById('inv-col-price').value = priceVal;
+                if (document.getElementById('inv-col-mac')) document.getElementById('inv-col-mac').value = macVal;
+                if (document.getElementById('inv-col-serial')) document.getElementById('inv-col-serial').value = serialVal;
 
                 // Update State
                 state.inventoryState.mappedCols.material = matVal;
                 state.inventoryState.mappedCols.model = modelVal;
                 state.inventoryState.mappedCols.qty = qtyVal;
+                state.inventoryState.mappedCols.price = priceVal;
                 state.inventoryState.mappedCols.mac = macVal;
                 state.inventoryState.mappedCols.serial = serialVal;
 
@@ -3495,14 +3499,16 @@ function populateInventoryMappingSelects(columns) {
     const materialSelect = document.getElementById('inv-col-material');
     const modelSelect = document.getElementById('inv-col-model');
     const qtySelect = document.getElementById('inv-col-qty');
+    const priceSelect = document.getElementById('inv-col-price');
     const macSelect = document.getElementById('inv-col-mac');
     const serialSelect = document.getElementById('inv-col-serial');
 
     materialSelect.innerHTML = '<option value="" disabled selected>Seçiniz...</option>';
     if (modelSelect) modelSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
     qtySelect.innerHTML = '<option value="row_count">Her satır 1 adet (Satır Sayısı)</option>';
-    macSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
-    serialSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
+    if (priceSelect) priceSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
+    if (macSelect) macSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
+    if (serialSelect) serialSelect.innerHTML = '<option value="">(İsteğe Bağlı) Seçiniz...</option>';
 
     columns.forEach(col => {
         // Material Name Options
@@ -3525,17 +3531,29 @@ function populateInventoryMappingSelects(columns) {
         optQty.textContent = col;
         qtySelect.appendChild(optQty);
 
+        // Price Options
+        if (priceSelect) {
+            const optPr = document.createElement('option');
+            optPr.value = col;
+            optPr.textContent = col;
+            priceSelect.appendChild(optPr);
+        }
+
         // MAC Options
-        const optMac = document.createElement('option');
-        optMac.value = col;
-        optMac.textContent = col;
-        macSelect.appendChild(optMac);
+        if (macSelect) {
+            const optMac = document.createElement('option');
+            optMac.value = col;
+            optMac.textContent = col;
+            macSelect.appendChild(optMac);
+        }
 
         // Serial Options
-        const optSer = document.createElement('option');
-        optSer.value = col;
-        optSer.textContent = col;
-        serialSelect.appendChild(optSer);
+        if (serialSelect) {
+            const optSer = document.createElement('option');
+            optSer.value = col;
+            optSer.textContent = col;
+            serialSelect.appendChild(optSer);
+        }
     });
 }
 
@@ -3543,12 +3561,14 @@ function guessInventoryColumns(columns) {
     const matSelect = document.getElementById('inv-col-material');
     const modelSelect = document.getElementById('inv-col-model');
     const qtySelect = document.getElementById('inv-col-qty');
+    const priceSelect = document.getElementById('inv-col-price');
     const macSelect = document.getElementById('inv-col-mac');
     const serSelect = document.getElementById('inv-col-serial');
 
     let guessedMat = '';
     let guessedModel = '';
     let guessedQty = 'row_count';
+    let guessedPrice = '';
     let guessedMac = '';
     let guessedSer = '';
 
@@ -3576,8 +3596,18 @@ function guessInventoryColumns(columns) {
         }
     }
 
-    // Guess Qty
-    const qtyKeywords = ['adet', 'miktar', 'sayi', 'count', 'quantity', 'qty', 'tutar'];
+    // Guess Price
+    const priceKeywords = ['fiyat', 'price', 'ucret', 'ücret', 'maliyet', 'cost', 'birim_fiyat', 'bedel', 'tutar'];
+    for (const col of columns) {
+        const lower = col.toLowerCase();
+        if (priceKeywords.some(k => lower === k || lower.includes(k))) {
+            guessedPrice = col;
+            break;
+        }
+    }
+
+    // Guess Qty (excluding price match if possible)
+    const qtyKeywords = ['adet', 'miktar', 'sayi', 'count', 'quantity', 'qty'];
     for (const col of columns) {
         const lower = col.toLowerCase();
         if (qtyKeywords.some(k => lower === k || lower.includes(k))) {
@@ -3610,6 +3640,7 @@ function guessInventoryColumns(columns) {
     if (matSelect) matSelect.value = guessedMat;
     if (modelSelect) modelSelect.value = guessedModel;
     if (qtySelect) qtySelect.value = guessedQty;
+    if (priceSelect) priceSelect.value = guessedPrice;
     if (macSelect) macSelect.value = guessedMac;
     if (serSelect) serSelect.value = guessedSer;
 
@@ -3617,8 +3648,8 @@ function guessInventoryColumns(columns) {
     state.inventoryState.mappedCols.material = guessedMat;
     state.inventoryState.mappedCols.model = guessedModel;
     state.inventoryState.mappedCols.qty = guessedQty;
+    state.inventoryState.mappedCols.price = guessedPrice;
     state.inventoryState.mappedCols.mac = guessedMac;
-    state.inventoryState.mappedCols.serial = guessedSer;
     state.inventoryState.mappedCols.serial = guessedSer;
 }
 
@@ -3629,6 +3660,7 @@ function calculateAndRenderInventory() {
     if (!mapped.material) return;
 
     let totalQty = 0;
+    let totalValuation = 0;
     let macCount = 0;
     let serialCount = 0;
     const groups = {};
@@ -3646,6 +3678,15 @@ function calculateAndRenderInventory() {
 
         totalQty += qty;
         groups[matVal] = (groups[matVal] || 0) + qty;
+
+        // Valuation
+        if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
+            const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
+            const pVal = parseFloat(pClean);
+            if (!isNaN(pVal)) {
+                totalValuation += (qty * pVal);
+            }
+        }
 
         // MAC status
         if (mapped.mac && row[mapped.mac] !== null && String(row[mapped.mac]).trim() !== '') {
@@ -3666,6 +3707,12 @@ function calculateAndRenderInventory() {
 
     // Update stats cards
     document.getElementById('inv-stat-total').textContent = totalQty.toLocaleString();
+    const valStatEl = document.getElementById('inv-stat-total-value');
+    if (valStatEl) {
+        valStatEl.textContent = totalValuation > 0
+            ? totalValuation.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₺'
+            : '0 ₺';
+    }
     document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
     document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
     document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
@@ -3940,7 +3987,7 @@ function renderInventoryDevicesTable() {
         : `<i class="fa-solid fa-laptop-code text-indigo"></i> Cihaz ve Sarf Malzeme Detay Listesi (${filteredRows.length} Adet)`;
 
     if (filteredRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
         return;
     }
 
@@ -3968,6 +4015,18 @@ function renderInventoryDevicesTable() {
             qtyCell = `<span class="font-semibold text-secondary">${qtyVal.toLocaleString()}</span>`;
         }
 
+        // Price formatting
+        let unitPriceCell = '<span class="text-muted" style="font-size: 0.75rem;">-</span>';
+        let totalPriceCell = '<span class="text-muted" style="font-size: 0.75rem;">-</span>';
+        if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
+            const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
+            const pVal = parseFloat(pClean);
+            if (!isNaN(pVal)) {
+                unitPriceCell = `<span style="color: #10b981; font-weight: 600;">${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
+                totalPriceCell = `<span style="color: #10b981; font-weight: 700;">${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺</span>`;
+            }
+        }
+
         const macCell = macVal ? `<code style="color: var(--accent-primary); font-size: 0.8rem;">${macVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
         const serCell = serVal ? `<code style="color: var(--success); font-size: 0.8rem;">${serVal}</code>` : '<span class="text-muted" style="font-size: 0.75rem;">Boş / Belirtilmemiş</span>';
 
@@ -3975,12 +4034,14 @@ function renderInventoryDevicesTable() {
             <td class="text-center font-semibold text-secondary" style="width: 60px;">${row._rowid_ || (index + 1)}</td>
             <td class="font-medium" style="text-align: left;">${matVal}</td>
             <td class="font-medium" style="text-align: left;">${modelCell}</td>
-            <td style="text-align: center; width: 130px;">${qtyCell}</td>
-            <td style="text-align: left; width: 180px;">${serCell}</td>
-            <td style="text-align: left; width: 180px;">${macCell}</td>
-            <td style="text-align: center; width: 100px;">
+            <td style="text-align: center; width: 110px;">${qtyCell}</td>
+            <td style="text-align: right; width: 120px;">${unitPriceCell}</td>
+            <td style="text-align: right; width: 130px;">${totalPriceCell}</td>
+            <td style="text-align: left; width: 160px;">${serCell}</td>
+            <td style="text-align: left; width: 160px;">${macCell}</td>
+            <td style="text-align: center; width: 90px;">
                 <button class="btn btn-secondary btn-xs btn-view-dev-details" style="padding: 3px 6px;">
-                    <i class="fa-solid fa-circle-info"></i> Detay Kartı
+                    <i class="fa-solid fa-circle-info"></i> Detay
                 </button>
             </td>
         `;
