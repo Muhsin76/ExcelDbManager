@@ -36,12 +36,8 @@
                     <span>Tablolarım</span>
                 </a>
                 <a href="#import" class="nav-item" data-tab="import">
-                    <i class="fa-solid fa-file-import"></i>
-                    <span>Excel/CSV Yükle</span>
-                </a>
-                <a href="#create-table" class="nav-item" data-tab="create-table">
-                    <i class="fa-solid fa-square-plus"></i>
-                    <span>Manuel Tablo Oluştur</span>
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Tablo Yükle/Oluştur</span>
                 </a>
                 <a href="#relations" class="nav-item" data-tab="relations">
                     <i class="fa-solid fa-link"></i>
@@ -314,9 +310,28 @@
                     </div>
                 </section>
 
-                <!-- 3. IMPORT EXCEL/CSV VIEW -->
+                <!-- 3. IMPORT & CREATE TABLE VIEW -->
                 <section id="view-import" class="tab-view">
-                    <div class="import-container card-glass">
+                    <!-- Top Sub-Tab Navigation Header -->
+                    <div class="import-mode-selector card-glass mb-4" style="padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px;">
+                                <i class="fa-solid fa-cloud-arrow-up text-indigo"></i> Tablo Yükle / Oluştur Portalı
+                            </h2>
+                            <p class="subtitle" style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Excel/CSV dosyanızı yükleyin veya sıfırdan manuel veritabanı tablosu tasarlayın.</p>
+                        </div>
+                        <div class="sub-tab-toggle-group" style="display: flex; background: rgba(0, 0, 0, 0.25); border-radius: 12px; padding: 4px; border: 1px solid var(--border-color);">
+                            <button type="button" class="btn btn-sm sub-tab-btn btn-primary active" id="subtab-import-file" onclick="switchImportSubTab('file')" style="padding: 8px 18px; font-weight: 600; border-radius: 8px;">
+                                <i class="fa-solid fa-file-excel text-success"></i> Excel / CSV Yükle
+                            </button>
+                            <button type="button" class="btn btn-sm sub-tab-btn btn-secondary" id="subtab-create-manual" onclick="switchImportSubTab('manual')" style="padding: 8px 18px; font-weight: 600; border-radius: 8px;">
+                                <i class="fa-solid fa-square-plus text-indigo"></i> Manuel Tablo Oluştur
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Option 1: File Upload Area -->
+                    <div id="import-file-container" class="import-container card-glass">
                         <!-- Step 1: Upload File -->
                         <div id="import-step-upload" class="import-step active">
                             <div class="upload-zone" id="drop-zone">
@@ -417,11 +432,9 @@
                             </div>
                         </div>
                     </div>
-                </section>
 
-                <!-- 4. CREATE TABLE MANUALLY VIEW -->
-                <section id="view-create-table" class="tab-view">
-                    <div class="create-table-container card-glass">
+                    <!-- Option 2: Manual Table Designer Area (Hidden initially) -->
+                    <div id="create-manual-container" class="create-table-container card-glass hidden">
                         <h2>Yeni Tablo Tasarımcısı</h2>
                         <p class="subtitle">Sütunları ve veri tiplerini manuel tanımlayarak yeni bir SQLite tablosu oluşturun.</p>
 

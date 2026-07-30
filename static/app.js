@@ -156,7 +156,44 @@ function initNavigation() {
     }
 }
 
+function switchImportSubTab(mode) {
+    const fileContainer = document.getElementById('import-file-container');
+    const manualContainer = document.getElementById('create-manual-container');
+    const btnFile = document.getElementById('subtab-import-file');
+    const btnManual = document.getElementById('subtab-create-manual');
+
+    if (mode === 'manual') {
+        if (fileContainer) fileContainer.classList.add('hidden');
+        if (manualContainer) manualContainer.classList.remove('hidden');
+        if (btnFile) {
+            btnFile.classList.remove('active', 'btn-primary');
+            btnFile.classList.add('btn-secondary');
+        }
+        if (btnManual) {
+            btnManual.classList.add('active', 'btn-primary');
+            btnManual.classList.remove('btn-secondary');
+        }
+    } else {
+        if (fileContainer) fileContainer.classList.remove('hidden');
+        if (manualContainer) manualContainer.classList.add('hidden');
+        if (btnFile) {
+            btnFile.classList.add('active', 'btn-primary');
+            btnFile.classList.remove('btn-secondary');
+        }
+        if (btnManual) {
+            btnManual.classList.remove('active', 'btn-primary');
+            btnManual.classList.add('btn-secondary');
+        }
+    }
+}
+
 function switchTab(tabId) {
+    if (tabId === 'create-table') {
+        switchTab('import');
+        switchImportSubTab('manual');
+        return;
+    }
+
     state.activeTab = tabId;
     window.location.hash = tabId;
 
@@ -191,11 +228,8 @@ function switchTab(tabId) {
         pageSubtitle.textContent = 'Verileri listeleme, filtreleme, arama ve düzenleme';
         loadTablesList();
     } else if (tabId === 'import') {
-        pageTitle.textContent = 'Excel / CSV Veri Yükleme Portalı';
-        pageSubtitle.textContent = 'Verilerinizi yükleyin, düzenleyin ve veritabanına aktarın';
-    } else if (tabId === 'create-table') {
-        pageTitle.textContent = 'Manuel Tablo Tasarımcısı';
-        pageSubtitle.textContent = 'Veritabanı sütunlarını tanımlayıp yeni tablo oluşturun';
+        pageTitle.textContent = 'Tablo Yükle / Oluştur';
+        pageSubtitle.textContent = 'Excel/CSV dosyanızı yükleyin veya sıfırdan manuel veritabanı tablosu tasarlayın';
     } else if (tabId === 'relations') {
         pageTitle.textContent = 'Tablo İlişkileri Tasarımcısı';
         pageSubtitle.textContent = 'Tabloları yan yana getirip aralarında otomatik silme ve güncelleme ilişkileri kurun';
