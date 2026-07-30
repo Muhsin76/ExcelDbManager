@@ -3706,12 +3706,20 @@ function calculateAndRenderInventory() {
     const serialRatio = totalQty > 0 ? Math.round((serialCount / totalQty) * 100) : 0;
 
     // Update stats cards
-    document.getElementById('inv-stat-total').textContent = totalQty.toLocaleString();
+    const totalQtyStr = totalQty.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+    const statTotalEl = document.getElementById('inv-stat-total');
+    if (statTotalEl) {
+        statTotalEl.textContent = totalQtyStr;
+        statTotalEl.setAttribute('title', totalQtyStr);
+    }
+
     const valStatEl = document.getElementById('inv-stat-total-value');
     if (valStatEl) {
-        valStatEl.textContent = totalValuation > 0
+        const valStr = totalValuation > 0
             ? totalValuation.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₺'
             : '0 ₺';
+        valStatEl.textContent = valStr;
+        valStatEl.setAttribute('title', valStr);
     }
     document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
     document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;

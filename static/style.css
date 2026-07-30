@@ -2565,5 +2565,22 @@ code {
     font-weight: 600;
 }
 
+/* Stat Card Overflow Safety & Auto Font Scaling */
+.stat-card {
+    overflow: hidden !important;
+    min-width: 0 !important;
+}
 
+.stat-card .stat-value {
+    font-size: clamp(1.1rem, 2vw, 1.5rem) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    max-width: 100% !important;
+}
 
+.stat-card .stat-label {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}

@@ -726,26 +726,26 @@
                         <!-- Main content dashboard (hidden if no table loaded) -->
                         <div id="inventory-dashboard" class="hidden mt-4">
                             <!-- Dashboard Metrics cards -->
-                            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                                <div class="stat-card" style="padding: 16px; text-align: left;">
-                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Toplam Malzeme/Adet</div>
-                                    <div class="stat-value" id="inv-stat-total" style="font-size: 1.8rem; font-weight: 700; color: var(--accent-primary); margin-top: 4px;">0</div>
+                            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                                <div class="stat-card" style="padding: 16px; text-align: left; overflow: hidden; min-width: 0;">
+                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Toplam Malzeme/Adet</div>
+                                    <div class="stat-value" id="inv-stat-total" style="font-weight: 700; color: var(--accent-primary); margin-top: 4px;">0</div>
                                 </div>
-                                <div class="stat-card" style="padding: 16px; text-align: left;">
-                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Toplam Envanter Değeri</div>
-                                    <div class="stat-value" id="inv-stat-total-value" style="font-size: 1.8rem; font-weight: 700; color: #10b981; margin-top: 4px;">0 ₺</div>
+                                <div class="stat-card" style="padding: 16px; text-align: left; overflow: hidden; min-width: 0;">
+                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Toplam Envanter Değeri</div>
+                                    <div class="stat-value" id="inv-stat-total-value" style="font-weight: 700; color: #10b981; margin-top: 4px;">0 ₺</div>
                                 </div>
-                                <div class="stat-card" style="padding: 16px; text-align: left;">
-                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Malzeme Çeşitliliği</div>
-                                    <div class="stat-value" id="inv-stat-types" style="font-size: 1.8rem; font-weight: 700; color: var(--success); margin-top: 4px;">0</div>
+                                <div class="stat-card" style="padding: 16px; text-align: left; overflow: hidden; min-width: 0;">
+                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Malzeme Çeşitliliği</div>
+                                    <div class="stat-value" id="inv-stat-types" style="font-weight: 700; color: var(--success); margin-top: 4px;">0</div>
                                 </div>
-                                <div class="stat-card" style="padding: 16px; text-align: left;">
-                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Tanımlı MAC Oranı</div>
-                                    <div class="stat-value" id="inv-stat-mac-ratio" style="font-size: 1.8rem; font-weight: 700; color: var(--warning); margin-top: 4px;">0%</div>
+                                <div class="stat-card" style="padding: 16px; text-align: left; overflow: hidden; min-width: 0;">
+                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Tanımlı MAC Oranı</div>
+                                    <div class="stat-value" id="inv-stat-mac-ratio" style="font-weight: 700; color: var(--warning); margin-top: 4px;">0%</div>
                                 </div>
-                                <div class="stat-card" style="padding: 16px; text-align: left;">
-                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Tanımlı Seri No Oranı</div>
-                                    <div class="stat-value" id="inv-stat-serial-ratio" style="font-size: 1.8rem; font-weight: 700; color: var(--purple); margin-top: 4px;">0%</div>
+                                <div class="stat-card" style="padding: 16px; text-align: left; overflow: hidden; min-width: 0;">
+                                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Tanımlı Seri No Oranı</div>
+                                    <div class="stat-value" id="inv-stat-serial-ratio" style="font-weight: 700; color: var(--purple); margin-top: 4px;">0%</div>
                                 </div>
                             </div>
 
