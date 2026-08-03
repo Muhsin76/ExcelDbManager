@@ -3764,9 +3764,14 @@ function calculateAndRenderInventory() {
         valStatEl.textContent = valStr;
         valStatEl.setAttribute('title', valStr);
     }
-    document.getElementById('inv-stat-types').textContent = uniqueTypesCount.toLocaleString();
-    document.getElementById('inv-stat-mac-ratio').textContent = `${macRatio}%`;
-    document.getElementById('inv-stat-serial-ratio').textContent = `${serialRatio}%`;
+    const typesEl = document.getElementById('inv-stat-types');
+    if (typesEl) typesEl.textContent = uniqueTypesCount.toLocaleString();
+
+    const macRatioEl = document.getElementById('inv-stat-mac-ratio');
+    if (macRatioEl) macRatioEl.textContent = `${macRatio}%`;
+
+    const serialRatioEl = document.getElementById('inv-stat-serial-ratio');
+    if (serialRatioEl) serialRatioEl.textContent = `${serialRatio}%`;
 
     // Sort groups based on quantity descending (default "Çoktan Aza" for left list)
     const sortedGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
