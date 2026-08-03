@@ -11,6 +11,8 @@ const state = {
             material: '',
             model: '',
             qty: 'row_count',
+            price: '',
+            currency: '₺',
             mac: '',
             serial: ''
         },
@@ -3186,7 +3188,7 @@ async function loadInventoryTab() {
         });
 
         // Mapping dropdowns change events
-        ['inv-col-material', 'inv-col-model', 'inv-col-qty', 'inv-col-price', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
+        ['inv-col-material', 'inv-col-model', 'inv-col-qty', 'inv-col-price', 'inv-col-currency', 'inv-col-mac', 'inv-col-serial'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', (e) => {
@@ -3253,6 +3255,7 @@ async function loadInventoryTab() {
                             model: mapped.model,
                             qty: mapped.qty,
                             price: mapped.price,
+                            currency: mapped.currency,
                             mac: mapped.mac,
                             serial: mapped.serial
                         })
@@ -3479,6 +3482,7 @@ async function loadInventoryTableData(tableName) {
                 const modelVal = colExists(mapping.model) ? mapping.model : '';
                 const qtyVal = (mapping.qty === 'row_count' || colExists(mapping.qty)) ? mapping.qty : 'row_count';
                 const priceVal = colExists(mapping.price) ? mapping.price : '';
+                const currencyVal = mapping.currency || '₺';
                 const macVal = colExists(mapping.mac) ? mapping.mac : '';
                 const serialVal = colExists(mapping.serial) ? mapping.serial : '';
 
@@ -3487,6 +3491,7 @@ async function loadInventoryTableData(tableName) {
                 if (document.getElementById('inv-col-model')) document.getElementById('inv-col-model').value = modelVal;
                 document.getElementById('inv-col-qty').value = qtyVal;
                 if (document.getElementById('inv-col-price')) document.getElementById('inv-col-price').value = priceVal;
+                if (document.getElementById('inv-col-currency')) document.getElementById('inv-col-currency').value = currencyVal;
                 if (document.getElementById('inv-col-mac')) document.getElementById('inv-col-mac').value = macVal;
                 if (document.getElementById('inv-col-serial')) document.getElementById('inv-col-serial').value = serialVal;
 
@@ -3495,6 +3500,7 @@ async function loadInventoryTableData(tableName) {
                 state.inventoryState.mappedCols.model = modelVal;
                 state.inventoryState.mappedCols.qty = qtyVal;
                 state.inventoryState.mappedCols.price = priceVal;
+                state.inventoryState.mappedCols.currency = currencyVal;
                 state.inventoryState.mappedCols.mac = macVal;
                 state.inventoryState.mappedCols.serial = serialVal;
 
@@ -3747,11 +3753,14 @@ function calculateAndRenderInventory() {
         statTotalEl.setAttribute('title', totalQtyStr);
     }
 
+    const currEl = document.getElementById('inv-col-currency');
+    const currencySymbol = mapped.currency || (currEl ? currEl.value : '₺') || '₺';
+
     const valStatEl = document.getElementById('inv-stat-total-value');
     if (valStatEl) {
         const valStr = totalValuation > 0
-            ? totalValuation.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₺'
-            : '0 ₺';
+            ? totalValuation.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ' + currencySymbol
+            : '0 ' + currencySymbol;
         valStatEl.textContent = valStr;
         valStatEl.setAttribute('title', valStr);
     }
@@ -4150,21 +4159,25 @@ function renderInventoryDevicesTable() {
                 rowHtml += `<td style="text-align: left; min-width: 140px; white-space: nowrap;">${macCell}</td>`;
             } else if (col.id === 'unit_price') {
                 let unitPriceStr = '-';
+                const currEl = document.getElementById('inv-col-currency');
+                const currencySymbol = mapped.currency || (currEl ? currEl.value : '₺') || '₺';
                 if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
                     const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
                     const pVal = parseFloat(pClean);
                     if (!isNaN(pVal)) {
-                        unitPriceStr = `${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
+                        unitPriceStr = `${pVal.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${currencySymbol}`;
                     }
                 }
                 rowHtml += `<td style="text-align: right; min-width: 120px; color: #10b981; font-weight: 600; white-space: nowrap;">${unitPriceStr}</td>`;
             } else if (col.id === 'total_price') {
                 let totalPriceStr = '-';
+                const currEl = document.getElementById('inv-col-currency');
+                const currencySymbol = mapped.currency || (currEl ? currEl.value : '₺') || '₺';
                 if (mapped.price && row[mapped.price] !== undefined && row[mapped.price] !== null) {
                     const pClean = String(row[mapped.price]).replace(/[^0-9.-]/g, '');
                     const pVal = parseFloat(pClean);
                     if (!isNaN(pVal)) {
-                        totalPriceStr = `${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
+                        totalPriceStr = `${(qtyVal * pVal).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${currencySymbol}`;
                     }
                 }
                 rowHtml += `<td style="text-align: right; min-width: 130px; color: #10b981; font-weight: 700; white-space: nowrap;">${totalPriceStr}</td>`;

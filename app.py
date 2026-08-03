@@ -63,6 +63,10 @@ def init_db():
         cursor.execute("ALTER TABLE _sys_inventory_mappings ADD COLUMN price_col TEXT;")
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute("ALTER TABLE _sys_inventory_mappings ADD COLUMN currency_unit TEXT DEFAULT '₺';")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -1670,7 +1674,7 @@ def get_inventory_mapping(table_name):
             return jsonify({'success': True, 'mapping': None})
             
         cursor.execute("""
-            SELECT material_col, model_col, qty_col, mac_col, serial_col, price_col 
+            SELECT material_col, model_col, qty_col, mac_col, serial_col, price_col, currency_unit 
             FROM _sys_inventory_mappings 
             WHERE table_name = ?;
         """, (table_name,))
@@ -1687,7 +1691,8 @@ def get_inventory_mapping(table_name):
                     'qty': row_dict.get('qty_col', ''),
                     'mac': row_dict.get('mac_col', ''),
                     'serial': row_dict.get('serial_col', ''),
-                    'price': row_dict.get('price_col', '')
+                    'price': row_dict.get('price_col', ''),
+                    'currency': row_dict.get('currency_unit', '₺') or '₺'
                 }
             })
         return jsonify({'success': True, 'mapping': None})
@@ -1706,6 +1711,7 @@ def save_inventory_mapping():
         mac_col = data.get('mac')
         serial_col = data.get('serial')
         price_col = data.get('price')
+        currency_unit = data.get('currency', '₺') or '₺'
         
         if not table_name:
             return jsonify({'success': False, 'error': 'Tablo adı gereklidir.'}), 400
@@ -1713,16 +1719,17 @@ def save_inventory_mapping():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO _sys_inventory_mappings (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO _sys_inventory_mappings (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col, currency_unit)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(table_name) DO UPDATE SET
                 material_col = excluded.material_col,
                 model_col = excluded.model_col,
                 qty_col = excluded.qty_col,
                 mac_col = excluded.mac_col,
                 serial_col = excluded.serial_col,
-                price_col = excluded.price_col;
-        """, (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col))
+                price_col = excluded.price_col,
+                currency_unit = excluded.currency_unit;
+        """, (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col, currency_unit))
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': 'Eşleştirme başarıyla kaydedildi.'})
