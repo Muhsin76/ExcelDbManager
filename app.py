@@ -76,14 +76,77 @@ init_db()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+TR_CHAR_MAP = str.maketrans({
+    'ç': 'c', 'Ç': 'C',
+    'ğ': 'g', 'Ğ': 'G',
+    'ı': 'i', 'I': 'I', 'İ': 'I', 'i': 'i',
+    'ö': 'o', 'Ö': 'O',
+    'ş': 's', 'Ş': 'S',
+    'ü': 'u', 'Ü': 'U'
+})
+
 # Helper to sanitize table and column names for SQL safety
 def sanitize_name(name):
+    if name is None:
+        return 'table_col'
+    name_str = str(name).strip()
+    if not name_str:
+        return 'table_col'
+    # Map Turkish characters to ASCII equivalents first
+    normalized = name_str.translate(TR_CHAR_MAP)
     # Keep alphanumeric characters and underscores, strip others
-    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name.strip())
+    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', normalized)
+    # Reduce multiple consecutive underscores (e.g. "Monthly__Cost" -> "Monthly_Cost")
+    sanitized = re.sub(r'_+', '_', sanitized).strip('_')
     # Ensure it starts with a letter or underscore
     if sanitized and sanitized[0].isdigit():
         sanitized = '_' + sanitized
     return sanitized or 'table_col'
+
+# Helper function for reading CSV files with auto encoding detection and delimiter sniffing
+def read_csv_file(file_path):
+    with open(file_path, 'rb') as f:
+        content_bytes = f.read()
+
+    text = None
+    encodings_to_try = ['utf-8-sig', 'utf-8', 'iso-8859-9', 'windows-1254', 'latin-1']
+    for enc in encodings_to_try:
+        try:
+            text = content_bytes.decode(enc)
+            break
+        except (UnicodeDecodeError, TypeError):
+            continue
+
+    if text is None:
+        text = content_bytes.decode('latin-1', errors='replace')
+
+    lines = text.splitlines()
+    non_empty_lines = [line for line in lines if line.strip()]
+    if not non_empty_lines:
+        return [], []
+
+    sample = "\n".join(non_empty_lines[:20])
+    delimiter = ','
+    try:
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample, delimiters=',;\t|')
+        delimiter = dialect.delimiter
+    except Exception:
+        first_line = non_empty_lines[0]
+        counts = {d: first_line.count(d) for d in [';', ',', '\t', '|']}
+        max_d = max(counts, key=counts.get)
+        if counts[max_d] > 0:
+            delimiter = max_d
+
+    reader = csv.reader(non_empty_lines, delimiter=delimiter)
+    all_rows = [row for row in reader if any(field.strip() for field in row)]
+    if not all_rows:
+        return [], []
+
+    header = all_rows[0]
+    data_rows = all_rows[1:]
+    return header, data_rows
+
 
 # Helper to guarantee unique column names from raw file headers
 def make_unique_column_names(column_names):
@@ -749,40 +812,37 @@ def parse_file():
         else:
             # CSV file
             try:
-                with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
-                    reader = csv.reader(f)
-                    header = next(reader, None)
-                    if header:
-                        columns = make_unique_column_names(header)
-                        
-                        rows_data = []
-                        for i, r in enumerate(reader):
-                            rows_data.append(r)
-                            if len(rows_data) >= 5:
-                                break
+                header, rows_data = read_csv_file(file_path)
+                if header:
+                    columns = make_unique_column_names(header)
+                    
+                    preview_rows_raw = rows_data[:5]
+                    col_values = {col: [] for col in columns}
+                    for r in preview_rows_raw:
+                        for idx, val in enumerate(r):
+                            if idx < len(columns):
+                                col_values[columns[idx]].append(val)
                                 
-                        col_values = {col: [] for col in columns}
-                        for r in rows_data:
-                            for idx, val in enumerate(r):
-                                if idx < len(columns):
-                                    col_values[columns[idx]].append(val)
-                                    
-                        detected_types = {col: guess_data_type(col_values[col]) for col in columns}
-                        columns_meta = [{'name': col, 'type': detected_types[col]} for col in columns]
+                    detected_types = {col: guess_data_type(col_values[col]) for col in columns}
+                    columns_meta = [{'name': col, 'type': detected_types[col]} for col in columns]
+                    
+                    for r in preview_rows_raw:
+                        row_dict = {}
+                        for idx, val in enumerate(r):
+                            if idx < len(columns):
+                                row_dict[columns[idx]] = val
+                        preview_rows.append(row_dict)
                         
-                        for r in rows_data:
-                            row_dict = {}
-                            for idx, val in enumerate(r):
-                                if idx < len(columns):
-                                    row_dict[columns[idx]] = val
-                            preview_rows.append(row_dict)
-                            
-                        columns = columns_meta
+                    columns = columns_meta
             except Exception as e:
                 # Cleanup if parse failed
                 if os.path.exists(file_path):
-                    os.remove(file_path)
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
                 return jsonify({'success': False, 'error': f"Failed to parse CSV file: {str(e)}"}), 500
+
                 
         return jsonify({
             'success': True,
@@ -926,17 +986,16 @@ def import_file():
                         pass
         else:
             # CSV
-            with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
-                reader = csv.reader(f)
-                header = next(reader, None)
-                if header:
-                    file_headers = make_unique_column_names(header)
-                    for r in reader:
-                        row_dict = {}
-                        for idx, val in enumerate(r):
-                            if idx < len(file_headers):
-                                row_dict[file_headers[idx]] = val
-                        rows_to_insert.append(row_dict)
+            header, rows_data = read_csv_file(file_path)
+            if header:
+                file_headers = make_unique_column_names(header)
+                for r in rows_data:
+                    row_dict = {}
+                    for idx, val in enumerate(r):
+                        if idx < len(file_headers):
+                            row_dict[file_headers[idx]] = val
+                    rows_to_insert.append(row_dict)
+
                         
         if not file_headers:
             return jsonify({'success': False, 'error': 'No header row found in file.'}), 400
