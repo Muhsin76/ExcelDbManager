@@ -287,6 +287,7 @@ def index():
 # 1. List all tables
 @app.route('/api/tables', methods=['GET'])
 def list_tables():
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -311,14 +312,17 @@ def list_tables():
                 'rowCount': row_count
             })
             
-        conn.close()
         return jsonify({'success': True, 'tables': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 2. Create table manually
 @app.route('/api/tables', methods=['POST'])
 def create_table():
+    conn = None
     try:
         data = request.json
         table_name = sanitize_name(data.get('table_name'))
@@ -342,15 +346,20 @@ def create_table():
         conn = get_db_connection()
         conn.execute(sql)
         conn.commit()
-        conn.close()
         
         return jsonify({'success': True, 'message': f"Table '{table_name}' created successfully."})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 3. Delete table
 @app.route('/api/tables/<table_name>', methods=['DELETE'])
 def delete_table(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         conn = get_db_connection()
@@ -368,10 +377,14 @@ def delete_table(table_name):
             """, (table_name, table_name))
             
         conn.commit()
-        conn.close()
         return jsonify({'success': True, 'message': f"Table '{table_name}' deleted successfully."})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 4. Get table data (paginated, sorted, searched)
 @app.route('/api/tables/<table_name>', methods=['GET'])
@@ -482,6 +495,7 @@ def get_table_data(table_name):
 # 4b. Get ALL table data without pagination (for analytics/charting)
 @app.route('/api/tables/<table_name>/all', methods=['GET'])
 def get_all_table_data(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         conn = get_db_connection()
@@ -497,7 +511,6 @@ def get_all_table_data(table_name):
         cursor.execute(f"SELECT rowid as _rowid_, * FROM {table_name} ORDER BY rowid ASC;")
         rows = [dict(row) for row in cursor.fetchall()]
         
-        conn.close()
         return jsonify({
             'success': True,
             'table': table_name,
@@ -507,6 +520,9 @@ def get_all_table_data(table_name):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 4b. Get all rowids (matching current search and column filters)
 @app.route('/api/tables/<table_name>/rowids', methods=['GET'])
@@ -581,6 +597,7 @@ def get_table_rowids(table_name):
 # 5. Insert row
 @app.route('/api/tables/<table_name>/row', methods=['POST'])
 def insert_row(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         row_data = request.json
@@ -608,15 +625,19 @@ def insert_row(table_name):
         conn.commit()
         
         new_rowid = cursor.lastrowid
-        conn.close()
-        
         return jsonify({'success': True, 'message': 'Row inserted successfully.', 'rowid': new_rowid})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 6. Update row
 @app.route('/api/tables/<table_name>/row/<int:rowid>', methods=['PUT'])
 def update_row(table_name, rowid):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         row_data = request.json
@@ -641,28 +662,38 @@ def update_row(table_name, rowid):
         sql = f"UPDATE {table_name} SET {', '.join(update_clauses)} WHERE rowid = ?"
         cursor.execute(sql, update_vals + [rowid])
         conn.commit()
-        conn.close()
         
         return jsonify({'success': True, 'message': 'Row updated successfully.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 7. Delete row
 @app.route('/api/tables/<table_name>/row/<int:rowid>', methods=['DELETE'])
 def delete_row(table_name, rowid):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         conn = get_db_connection()
         conn.execute(f"DELETE FROM {table_name} WHERE rowid = ?;", (rowid,))
         conn.commit()
-        conn.close()
         return jsonify({'success': True, 'message': 'Row deleted successfully.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 7a. Bulk delete rows
 @app.route('/api/tables/<table_name>/rows/bulk-delete', methods=['POST'])
 def bulk_delete_rows(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         data = request.json
@@ -677,15 +708,20 @@ def bulk_delete_rows(table_name):
         conn = get_db_connection()
         conn.execute(sql, rowids)
         conn.commit()
-        conn.close()
         
         return jsonify({'success': True, 'message': f'{len(rowids)} rows deleted successfully.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 7b. Bulk update rows
 @app.route('/api/tables/<table_name>/rows/bulk-update', methods=['POST'])
 def bulk_update_rows(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         data = request.json
@@ -704,7 +740,6 @@ def bulk_update_rows(table_name):
         columns = [col['name'] for col in cursor.fetchall()]
         
         if column not in columns:
-            conn.close()
             return jsonify({'success': False, 'error': f"Column '{column}' does not exist in table."}), 400
             
         placeholders = ', '.join(['?'] * len(rowids))
@@ -712,11 +747,15 @@ def bulk_update_rows(table_name):
         
         cursor.execute(sql, [value] + rowids)
         conn.commit()
-        conn.close()
         
         return jsonify({'success': True, 'message': f'{len(rowids)} rows updated successfully.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': translate_db_error(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 8. Parse uploaded CSV/Excel file for preview
 @app.route('/api/parse-file', methods=['POST'])
@@ -1091,6 +1130,7 @@ def import_file():
 # 10. Export database table as CSV or Excel
 @app.route('/api/tables/<table_name>/export', methods=['GET'])
 def export_table(table_name):
+    conn = None
     try:
         table_name = sanitize_name(table_name)
         export_format = request.args.get('format', 'csv').lower()
@@ -1761,6 +1801,7 @@ def get_inventory_mapping(table_name):
 # 16. Save or update inventory mapping
 @app.route('/api/inventory/mapping', methods=['POST'])
 def save_inventory_mapping():
+    conn = None
     try:
         data = request.json
         table_name = sanitize_name(data.get('table_name'))
@@ -1790,14 +1831,19 @@ def save_inventory_mapping():
                 currency_unit = excluded.currency_unit;
         """, (table_name, material_col, model_col, qty_col, mac_col, serial_col, price_col, currency_unit))
         conn.commit()
-        conn.close()
         return jsonify({'success': True, 'message': 'Eşleştirme başarıyla kaydedildi.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 17. Delete inventory mapping for a table
 @app.route('/api/inventory/mapping/<table_name>', methods=['DELETE'])
 def delete_inventory_mapping(table_name):
+    conn = None
     try:
         if not table_name:
             return jsonify({'success': False, 'error': 'Tablo adı gereklidir.'}), 400
@@ -1806,10 +1852,14 @@ def delete_inventory_mapping(table_name):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM _sys_inventory_mappings WHERE table_name = ?;", (table_name,))
         conn.commit()
-        conn.close()
         return jsonify({'success': True, 'message': 'Eşleştirme başarıyla silindi.'})
     except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 # 18. Backup Database
 @app.route('/api/backup', methods=['GET'])
@@ -1877,6 +1927,7 @@ def restore_database():
 # 20. Run Raw SQL Query
 @app.route('/api/sql/run', methods=['POST'])
 def run_sql_query():
+    conn = None
     try:
         data = request.json or {}
         query = data.get('query', '').strip()
@@ -1900,7 +1951,6 @@ def run_sql_query():
             rows = cursor.fetchall()
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
             result_rows = [dict(row) for row in rows]
-            conn.close()
             return jsonify({
                 'success': True,
                 'is_select': True,
@@ -1910,7 +1960,6 @@ def run_sql_query():
         else:
             conn.commit()
             rows_affected = cursor.rowcount
-            conn.close()
             return jsonify({
                 'success': True,
                 'is_select': False,
@@ -1918,7 +1967,12 @@ def run_sql_query():
                 'message': f'Sorgu başarıyla yürütüldü. Etkilenen satır sayısı: {rows_affected}'
             })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': translate_db_error(e)}), 400
+    finally:
+        if conn:
+            conn.close()
 
 # --- DIFF & MERGE MODULE ---
 
@@ -2128,6 +2182,7 @@ def compare_diff():
 
 @app.route('/api/diff/merge', methods=['POST'])
 def merge_diff():
+    conn = None
     try:
         data = request.json or {}
         target_table = sanitize_name(data.get('target_table', ''))
